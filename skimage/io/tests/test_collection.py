@@ -1,13 +1,22 @@
 import os
+import itertools
 
 import numpy as np
-import imageio
+import imageio.v3 as iio3
 from skimage import data_dir
 from skimage.io.collection import ImageCollection, MultiImage, alphanumeric_key
 from skimage.io import reset_plugins
 
 from skimage._shared import testing
-from skimage._shared.testing import assert_equal, assert_allclose, TestCase
+from skimage._shared.testing import assert_equal, assert_allclose, fetch
+
+import pytest
+
+
+try:
+    has_pooch = True
+except ModuleNotFoundError:
+    has_pooch = False
 
 
 def test_string_split():
@@ -17,12 +26,27 @@ def test_string_split():
 
 
 def test_string_sort():
-    filenames = ['f9.10.png', 'f9.9.png', 'f10.10.png', 'f10.9.png',
-                 'e9.png', 'e10.png', 'em.png']
-    expected_filenames = ['e9.png', 'e10.png', 'em.png', 'f9.9.png',
-                          'f9.10.png', 'f10.9.png', 'f10.10.png']
+    filenames = [
+        'f9.10.png',
+        'f9.9.png',
+        'f10.10.png',
+        'f10.9.png',
+        'e9.png',
+        'e10.png',
+        'em.png',
+    ]
+    expected_filenames = [
+        'e9.png',
+        'e10.png',
+        'em.png',
+        'f9.9.png',
+        'f9.10.png',
+        'f10.9.png',
+        'f10.10.png',
+    ]
     sorted_filenames = sorted(filenames, key=alphanumeric_key)
     assert_equal(expected_filenames, sorted_filenames)
+
 
 def test_imagecollection_input():
     """Test function for ImageCollection. The new behavior (implemented
@@ -35,30 +59,30 @@ def test_imagecollection_input():
     """
     # Ensure that these images are part of the legacy datasets
     # this means they will always be available in the user's install
-    # regarless of the availability of pooch
-    pattern = [os.path.join(data_dir, pic)
-               for pic in ['coffee.png',
-                           'chessboard_GRAY.png',
-                           'rocket.jpg']]
+    # regardless of the availability of pooch
+    pics = [
+        fetch('data/coffee.png'),
+        fetch('data/chessboard_GRAY.png'),
+        fetch('data/rocket.jpg'),
+    ]
+    pattern = [os.path.join(data_dir, pic) for pic in pics]
     images = ImageCollection(pattern)
     assert len(images) == 3
 
 
-class TestImageCollection(TestCase):
-    pattern = [os.path.join(data_dir, pic)
-               for pic in ['brick.png', 'color.png']]
+class TestImageCollection:
+    pics = [fetch('data/brick.png'), fetch('data/color.png'), fetch('data/moon.png')]
+    pattern = pics[:2]
+    pattern_same_shape = pics[::2]
 
-    pattern_matched = [os.path.join(data_dir, pic)
-                       for pic in ['brick.png', 'moon.png']]
-
-    def setUp(self):
+    def setup_method(self):
         reset_plugins()
         # Generic image collection with images of different shapes.
         self.images = ImageCollection(self.pattern)
         # Image collection with images having shapes that match.
-        self.images_matched = ImageCollection(self.pattern_matched)
+        self.images_matched = ImageCollection(self.pattern_same_shape)
         # Same images as a collection of frames
-        self.frames_matched = MultiImage(self.pattern_matched)
+        self.frames_matched = MultiImage(self.pattern_same_shape)
 
     def test_len(self):
         assert len(self.images) == 2
@@ -67,11 +91,11 @@ class TestImageCollection(TestCase):
         num = len(self.images)
         for i in range(-num, num):
             assert isinstance(self.images[i], np.ndarray)
-        assert_allclose(self.images[0],
-                        self.images[-num])
+        assert_allclose(self.images[0], self.images[-num])
 
         def return_img(n):
             return self.images[n]
+
         with testing.raises(IndexError):
             return_img(num)
         with testing.raises(IndexError):
@@ -92,16 +116,30 @@ class TestImageCollection(TestCase):
 
         def set_files(f):
             self.images.files = f
+
         with testing.raises(AttributeError):
             set_files('newfiles')
 
+    @pytest.mark.skipif(not has_pooch, reason="needs pooch to download data")
+    def test_custom_load_func_sequence(self):
+        filename = fetch('data/no_time_for_that_tiny.gif')
+
+        def reader(index):
+            return iio3.imread(filename, index=index)
+
+        ic = ImageCollection(range(24), load_func=reader)
+        # the length of ic should be that of the given load_pattern sequence
+        assert len(ic) == 24
+        # GIF file has frames of size 25x14 with 4 channels (RGBA)
+        assert ic[0].shape == (25, 14, 3)
+
+    @pytest.mark.skipif(not has_pooch, reason="needs pooch to download data")
     def test_custom_load_func_w_kwarg(self):
-        load_pattern = os.path.join(data_dir, 'no_time_for_that_tiny.gif')
+        load_pattern = fetch('data/no_time_for_that_tiny.gif')
 
         def load_fn(f, step):
-            vid = imageio.get_reader(f)
-            seq = [v for v in vid.iter_data()]
-            return seq[::step]
+            vid = iio3.imiter(f)
+            return list(itertools.islice(vid, None, None, step))
 
         ic = ImageCollection(load_pattern, load_func=load_fn, step=3)
         # Each file should map to one image (array).
@@ -110,7 +148,6 @@ class TestImageCollection(TestCase):
         assert len(ic[0]) == 8
 
     def test_custom_load_func(self):
-
         def load_fn(x):
             return x
 

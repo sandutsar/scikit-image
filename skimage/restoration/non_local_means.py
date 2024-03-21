@@ -2,26 +2,35 @@ import numpy as np
 
 from .._shared import utils
 from .._shared.utils import convert_to_float
-from ._nl_means_denoising import (_nl_means_denoising_2d,
-                                  _nl_means_denoising_3d,
-                                  _fast_nl_means_denoising_2d,
-                                  _fast_nl_means_denoising_3d,
-                                  _fast_nl_means_denoising_4d)
+from ._nl_means_denoising import (
+    _nl_means_denoising_2d,
+    _nl_means_denoising_3d,
+    _fast_nl_means_denoising_2d,
+    _fast_nl_means_denoising_3d,
+    _fast_nl_means_denoising_4d,
+)
 
 
 @utils.channel_as_last_axis()
-@utils.deprecate_multichannel_kwarg(multichannel_position=4)
-def denoise_nl_means(image, patch_size=7, patch_distance=11, h=0.1,
-                     multichannel=False, fast_mode=True, sigma=0., *,
-                     preserve_range=False, channel_axis=None):
-    """Perform non-local means denoising on 2-D or 3-D grayscale images, and
-    2-D RGB images.
+def denoise_nl_means(
+    image,
+    patch_size=7,
+    patch_distance=11,
+    h=0.1,
+    fast_mode=True,
+    sigma=0.0,
+    *,
+    preserve_range=False,
+    channel_axis=None,
+):
+    """Perform non-local means denoising on 2D-4D grayscale or RGB images.
 
     Parameters
     ----------
     image : 2D or 3D ndarray
         Input image to be denoised, which can be 2D or 3D, and grayscale
-        or RGB (for 2D images only, see ``multichannel`` parameter).
+        or RGB (for 2D images only, see ``channel_axis`` parameter). There can
+        be any number of channels (does not strictly have to be RGB).
     patch_size : int, optional
         Size of patches used for denoising.
     patch_distance : int, optional
@@ -32,10 +41,6 @@ def denoise_nl_means(image, patch_size=7, patch_distance=11, h=0.1,
         at the expense of blurring features. For a Gaussian noise of standard
         deviation sigma, a rule of thumb is to choose the value of h to be
         sigma of slightly less.
-    multichannel : bool, optional
-        Whether the last axis of the image is to be interpreted as multiple
-        channels or another spatial dimension. This argument is deprecated:
-        specify `channel_axis` instead.
     fast_mode : bool, optional
         If True (default value), a fast version of the non-local means
         algorithm is used. If False, the original version of non-local means is
@@ -66,7 +71,7 @@ def denoise_nl_means(image, patch_size=7, patch_distance=11, h=0.1,
 
     The non-local means algorithm is well suited for denoising images with
     specific textures. The principle of the algorithm is to average the value
-    of a given pixel with values of other pixels in a limited neighbourhood,
+    of a given pixel with values of other pixels in a limited neighborhood,
     provided that the *patches* centered on the other pixels are similar enough
     to the patch centered on the pixel of interest.
 
@@ -154,7 +159,8 @@ def denoise_nl_means(image, patch_size=7, patch_distance=11, h=0.1,
     if (ndim_no_channel < 2) or (ndim_no_channel > 4):
         raise NotImplementedError(
             "Non-local means denoising is only implemented for 2D, "
-            "3D or 4D grayscale or multichannel images.")
+            "3D or 4D grayscale or multichannel images."
+        )
 
     image = convert_to_float(image, preserve_range)
     if not image.flags.c_contiguous:
@@ -162,12 +168,10 @@ def denoise_nl_means(image, patch_size=7, patch_distance=11, h=0.1,
 
     kwargs = dict(s=patch_size, d=patch_distance, h=h, var=sigma * sigma)
     if ndim_no_channel == 2:
-        nlm_func = (_fast_nl_means_denoising_2d if fast_mode else
-                    _nl_means_denoising_2d)
+        nlm_func = _fast_nl_means_denoising_2d if fast_mode else _nl_means_denoising_2d
     elif ndim_no_channel == 3:
         if multichannel and not fast_mode:
-            raise NotImplementedError(
-                "Multichannel 3D requires fast_mode to be True.")
+            raise NotImplementedError("Multichannel 3D requires fast_mode to be True.")
         if fast_mode:
             nlm_func = _fast_nl_means_denoising_3d
         else:

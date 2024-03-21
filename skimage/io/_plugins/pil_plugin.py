@@ -1,20 +1,9 @@
 __all__ = ['imread', 'imsave']
 
 import numpy as np
-from packaging import version
-from PIL import Image, __version__ as pil_version
+from PIL import Image
 
 from ...util import img_as_ubyte, img_as_uint
-
-# Check CVE-2021-27921 and others
-if version.parse(pil_version) < version.parse('8.1.2'):
-    from warnings import warn
-    warn('Your installed pillow version is < 8.1.2. '
-         'Several security issues (CVE-2021-27921, '
-         'CVE-2021-25290, CVE-2021-25291, CVE-2021-25293, '
-         'and more) have been fixed in pillow 8.1.2 or higher. '
-         'We recommend to upgrade this library.',
-         stacklevel=2)
 
 
 def imread(fname, dtype=None, img_num=None, **kwargs):
@@ -61,13 +50,14 @@ def pil_to_ndarray(image, dtype=None, img_num=None):
     try:
         # this will raise an IOError if the file is not readable
         image.getdata()[0]
-    except IOError as e:
+    except OSError as e:
         site = "http://pillow.readthedocs.org/en/latest/installation.html#external-libraries"
         pillow_error_message = str(e)
-        error_message = ('Could not load "%s" \n'
-                         'Reason: "%s"\n'
-                         'Please see documentation at: %s'
-                         % (image.filename, pillow_error_message, site))
+        error_message = (
+            f"Could not load '{image.filename}' \n"
+            f"Reason: '{pillow_error_message}'\n"
+            f"Please see documentation at: {site}"
+        )
         raise ValueError(error_message)
     frames = []
     grayscale = None
@@ -114,7 +104,7 @@ def pil_to_ndarray(image, dtype=None, img_num=None):
             dtype = '>u2' if image.mode.endswith('B') else '<u2'
             if 'S' in image.mode:
                 dtype = dtype.replace('u', 'i')
-            frame = np.fromstring(frame.tobytes(), dtype)
+            frame = np.frombuffer(frame.tobytes(), dtype)
             frame.shape = shape[::-1]
 
         else:
@@ -134,7 +124,7 @@ def pil_to_ndarray(image, dtype=None, img_num=None):
     elif frames:
         return frames[0]
     elif img_num:
-        raise IndexError('Could not find image  #%s' % img_num)
+        raise IndexError(f'Could not find image  #{img_num}')
 
 
 def _palette_is_grayscale(pil_image):
@@ -153,10 +143,11 @@ def _palette_is_grayscale(pil_image):
     if pil_image.mode != 'P':
         raise ValueError('pil_image.mode must be equal to "P".')
     # get palette as an array with R, G, B columns
-    palette = np.asarray(pil_image.getpalette()).reshape((256, 3))
+    # Starting in pillow 9.1 palettes may have less than 256 entries
+    palette = np.asarray(pil_image.getpalette()).reshape((-1, 3))
     # Not all palette colors are used; unused colors have junk values.
     start, stop = pil_image.getextrema()
-    valid_palette = palette[start:stop + 1]
+    valid_palette = palette[start : stop + 1]
     # Image is grayscale if channel differences (R - G and G - B)
     # are all zero.
     return np.allclose(np.diff(valid_palette), 0)
@@ -251,8 +242,7 @@ def imsave(fname, arr, format_str=None, **kwargs):
     if not isinstance(fname, str) and format_str is None:
         format_str = "PNG"
     # Check for png in filename
-    if (isinstance(fname, str)
-            and fname.lower().endswith(".png")):
+    if isinstance(fname, str) and fname.lower().endswith(".png"):
         format_str = "PNG"
 
     arr = np.asanyarray(arr)
@@ -261,7 +251,7 @@ def imsave(fname, arr, format_str=None, **kwargs):
         arr = arr.astype(np.uint8)
 
     if arr.ndim not in (2, 3):
-        raise ValueError("Invalid shape for image array: %s" % (arr.shape, ))
+        raise ValueError(f"Invalid shape for image array: {arr.shape}")
 
     if arr.ndim == 3:
         if arr.shape[2] not in (3, 4):

@@ -1,14 +1,3 @@
-"""
-Originally part of CellProfiler, code licensed under both GPL and BSD
-licenses.
-Website: http://www.cellprofiler.org
-
-Copyright (c) 2003-2009 Massachusetts Institute of Technology
-Copyright (c) 2009-2011 Broad Institute
-All rights reserved.
-
-Original author: Lee Kamentsky
-"""
 cimport numpy as cnp
 
 
@@ -19,7 +8,7 @@ cdef struct Heapitem:
     Py_ssize_t source
 
 
-cdef inline int smaller(Heapitem *a, Heapitem *b) nogil:
+cdef inline int smaller(Heapitem *a, Heapitem *b) noexcept nogil:
     if a.value != b.value:
         return a.value < b.value
     return a.age < b.age

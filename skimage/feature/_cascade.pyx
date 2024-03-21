@@ -2,16 +2,14 @@
 # cython: boundscheck=False
 # cython: nonecheck=False
 # cython: wraparound=False
-# distutils: language = c++
 
 
 import numpy as np
 cimport numpy as cnp
-cimport safe_openmp as openmp
-from safe_openmp cimport have_openmp
+from . cimport safe_openmp as openmp
+from .safe_openmp cimport have_openmp
 from libc.stdlib cimport malloc, free
 from libcpp.vector cimport vector
-from skimage._shared.transform cimport integrate
 
 from skimage._shared.interpolation cimport round, fmax, fmin
 
@@ -92,7 +90,7 @@ cdef struct Stage:
 
 cdef vector[Detection] _group_detections(vector[Detection] detections,
                                          cnp.float32_t intersection_score_threshold=0.5,
-                                         int min_neighbour_number=4):
+                                         int min_neighbor_number=4):
     """Group similar detections into a single detection and eliminate weak
     (non-overlapping) detections.
 
@@ -107,7 +105,7 @@ cdef vector[Detection] _group_detections(vector[Detection] detections,
     ----------
     detections : vector[Detection]
         A cluster of detections.
-    min_neighbour_number : int
+    min_neighbor_number : int
         Minimum amount of intersecting detections in order for detection
         to be approved by the function.
     intersection_score_threshold : cnp.float32_t
@@ -124,7 +122,6 @@ cdef vector[Detection] _group_detections(vector[Detection] detections,
     cdef:
         Detection mean_detection
         vector[DetectionsCluster] clusters
-        vector[int] clusters_scores
         Py_ssize_t nr_of_clusters
         Py_ssize_t current_detection_nr
         Py_ssize_t current_cluster_nr
@@ -172,7 +169,7 @@ cdef vector[Detection] _group_detections(vector[Detection] detections,
                                             clusters[best_cluster_nr],
                                             detections[current_detection_nr])
 
-    clusters = threshold_clusters(clusters, min_neighbour_number)
+    clusters = threshold_clusters(clusters, min_neighbor_number)
     return get_mean_detections(clusters)
 
 
@@ -382,7 +379,6 @@ cdef cnp.float32_t rect_intersection_score(Detection rect_a, Detection rect_b):
 
     cdef:
         cnp.float32_t intersection_area
-        cnp.float32_t union_area
         cnp.float32_t smaller_area
         cnp.float32_t area_a = rect_a.height * rect_a.width
         cnp.float32_t area_b = rect_b.height * rect_b.width
@@ -495,7 +491,7 @@ cdef class Cascade:
         self._load_xml(xml_file, eps)
 
     cdef bint classify(self, cnp.float32_t[:, ::1] int_img, Py_ssize_t row,
-                       Py_ssize_t col, cnp.float32_t scale) nogil:
+                       Py_ssize_t col, cnp.float32_t scale) noexcept nogil:
         """Classify the provided image patch i.e. check if the classifier
         detects an object in the given image patch.
 
@@ -525,19 +521,14 @@ cdef class Cascade:
         """
 
         cdef:
-            cnp.float32_t stage_threshold
             cnp.float32_t stage_points
             int lbp_code
             int bit
             Py_ssize_t stage_number
             Py_ssize_t weak_classifier_number
-            Py_ssize_t feature_number
-            Py_ssize_t features_number
-            Py_ssize_t stumps_number
             Py_ssize_t first_stump_idx
             Py_ssize_t lut_idx
-            Py_ssize_t r, c, widht, height
-            cnp.uint32_t[::1] current_lut
+            Py_ssize_t r, c, width, height
             Stage current_stage
             MBLBPStump current_stump
             MBLBP current_feature
@@ -587,9 +578,9 @@ cdef class Cascade:
 
         Parameters
         ----------
-        min_size : typle (int, int)
+        min_size : tuple (int, int)
             Minimum size of window for which to search the scale factor.
-        max_size : typle (int, int)
+        max_size : tuple (int, int)
             Maximum size of window for which to search the scale factor.
         scale_step : cnp.float32_t
             The scale by which the search window is multiplied
@@ -650,7 +641,7 @@ cdef class Cascade:
 
     def detect_multi_scale(self, img, cnp.float32_t scale_factor,
                            cnp.float32_t step_ratio, min_size, max_size,
-                           min_neighbour_number=4,
+                           min_neighbor_number=4,
                            intersection_score_threshold=0.5):
         """Search for the object on multiple scales of input image.
 
@@ -671,11 +662,11 @@ cdef class Cascade:
             slow. By setting this parameter to higher values the results will
             be worse but the computation will be much faster. Usually, values
             in the interval [1, 1.5] give good results.
-        min_size : typle (int, int)
+        min_size : tuple (int, int)
             Minimum size of the search window.
-        max_size : typle (int, int)
+        max_size : tuple (int, int)
             Maximum size of the search window.
-        min_neighbour_number : int
+        min_neighbor_number : int
             Minimum amount of intersecting detections in order for detection
             to be approved by the function.
         intersection_score_threshold : cnp.float32_t
@@ -758,7 +749,6 @@ cdef class Cascade:
 
                     if result:
 
-                        new_detection = Detection()
                         new_detection.r = current_row
                         new_detection.c = current_col
                         new_detection.width = current_width
@@ -781,7 +771,7 @@ cdef class Cascade:
             openmp.omp_destroy_lock(&mylock)
 
         return list(_group_detections(output, intersection_score_threshold,
-                                      min_neighbour_number))
+                                      min_neighbor_number))
 
     def _load_xml(self, xml_file, eps=1e-5):
         """Load the parameters of cascade classifier into the class.
@@ -909,7 +899,9 @@ cdef class Cascade:
                 feature_number = int(internal_nodes[0])
                 # list() is for Python3 fix here
                 lut_array = list(map(lambda x: int(x), internal_nodes[1:]))
-                lut = np.asarray(lut_array, dtype='uint32')
+                # Cast via astype to avoid warning about integer wraparound.
+                # see: https://github.com/scikit-image/scikit-image/issues/6638
+                lut = np.asarray(lut_array).astype(np.uint32)
 
                 # Copy array to the main LUT array
                 for i in range(8):

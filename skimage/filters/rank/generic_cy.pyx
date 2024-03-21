@@ -16,12 +16,12 @@ cnp.import_array()
 
 cdef inline void _kernel_autolevel(dtype_t_out* out, Py_ssize_t odepth,
                                    Py_ssize_t[::1] histo,
-                                   double pop, dtype_t g,
+                                   cnp.float64_t pop, dtype_t g,
                                    Py_ssize_t n_bins, Py_ssize_t mid_bin,
-                                   double p0, double p1,
-                                   Py_ssize_t s0, Py_ssize_t s1) nogil:
+                                   cnp.float64_t p0, cnp.float64_t p1,
+                                   Py_ssize_t s0, Py_ssize_t s1) noexcept nogil:
 
-    cdef Py_ssize_t i, imin, imax, delta
+    cdef Py_ssize_t i, imin = 0, imax = 0, delta
 
     if pop:
         for i in range(n_bins - 1, -1, -1):
@@ -43,10 +43,10 @@ cdef inline void _kernel_autolevel(dtype_t_out* out, Py_ssize_t odepth,
 
 cdef inline void _kernel_equalize(dtype_t_out* out, Py_ssize_t odepth,
                                   Py_ssize_t[::1] histo,
-                                  double pop, dtype_t g,
+                                  cnp.float64_t pop, dtype_t g,
                                   Py_ssize_t n_bins, Py_ssize_t mid_bin,
-                                  double p0, double p1,
-                                  Py_ssize_t s0, Py_ssize_t s1) nogil:
+                                  cnp.float64_t p0, cnp.float64_t p1,
+                                  Py_ssize_t s0, Py_ssize_t s1) noexcept nogil:
 
     cdef Py_ssize_t i
     cdef Py_ssize_t sum = 0
@@ -63,12 +63,12 @@ cdef inline void _kernel_equalize(dtype_t_out* out, Py_ssize_t odepth,
 
 cdef inline void _kernel_gradient(dtype_t_out* out, Py_ssize_t odepth,
                                   Py_ssize_t[::1] histo,
-                                  double pop, dtype_t g,
+                                  cnp.float64_t pop, dtype_t g,
                                   Py_ssize_t n_bins, Py_ssize_t mid_bin,
-                                  double p0, double p1,
-                                  Py_ssize_t s0, Py_ssize_t s1) nogil:
+                                  cnp.float64_t p0, cnp.float64_t p1,
+                                  Py_ssize_t s0, Py_ssize_t s1) noexcept nogil:
 
-    cdef Py_ssize_t i, imin, imax
+    cdef Py_ssize_t i, imin = 0, imax = 0
 
     if pop:
         for i in range(n_bins - 1, -1, -1):
@@ -86,10 +86,10 @@ cdef inline void _kernel_gradient(dtype_t_out* out, Py_ssize_t odepth,
 
 cdef inline void _kernel_maximum(dtype_t_out* out, Py_ssize_t odepth,
                                  Py_ssize_t[::1] histo,
-                                 double pop, dtype_t g,
+                                 cnp.float64_t pop, dtype_t g,
                                  Py_ssize_t n_bins, Py_ssize_t mid_bin,
-                                 double p0, double p1,
-                                 Py_ssize_t s0, Py_ssize_t s1) nogil:
+                                 cnp.float64_t p0, cnp.float64_t p1,
+                                 Py_ssize_t s0, Py_ssize_t s1) noexcept nogil:
 
     cdef Py_ssize_t i
 
@@ -104,10 +104,10 @@ cdef inline void _kernel_maximum(dtype_t_out* out, Py_ssize_t odepth,
 
 cdef inline void _kernel_mean(dtype_t_out* out, Py_ssize_t odepth,
                               Py_ssize_t[::1] histo,
-                              double pop, dtype_t g,
+                              cnp.float64_t pop, dtype_t g,
                               Py_ssize_t n_bins, Py_ssize_t mid_bin,
-                              double p0, double p1,
-                              Py_ssize_t s0, Py_ssize_t s1) nogil:
+                              cnp.float64_t p0, cnp.float64_t p1,
+                              Py_ssize_t s0, Py_ssize_t s1) noexcept nogil:
 
     cdef Py_ssize_t i
     cdef Py_ssize_t mean = 0
@@ -122,13 +122,13 @@ cdef inline void _kernel_mean(dtype_t_out* out, Py_ssize_t odepth,
 
 cdef inline void _kernel_geometric_mean(dtype_t_out* out, Py_ssize_t odepth,
                                         Py_ssize_t[::1] histo,
-                                        double pop, dtype_t g,
+                                        cnp.float64_t pop, dtype_t g,
                                         Py_ssize_t n_bins, Py_ssize_t mid_bin,
-                                        double p0, double p1,
-                                        Py_ssize_t s0, Py_ssize_t s1) nogil:
+                                        cnp.float64_t p0, cnp.float64_t p1,
+                                        Py_ssize_t s0, Py_ssize_t s1) noexcept nogil:
 
     cdef Py_ssize_t i
-    cdef double mean = 0.
+    cdef cnp.float64_t mean = 0.
 
     if pop:
         for i in range(n_bins):
@@ -141,10 +141,10 @@ cdef inline void _kernel_geometric_mean(dtype_t_out* out, Py_ssize_t odepth,
 
 cdef inline void _kernel_subtract_mean(dtype_t_out* out, Py_ssize_t odepth,
                                        Py_ssize_t[::1] histo,
-                                       double pop, dtype_t g,
+                                       cnp.float64_t pop, dtype_t g,
                                        Py_ssize_t n_bins, Py_ssize_t mid_bin,
-                                       double p0, double p1,
-                                       Py_ssize_t s0, Py_ssize_t s1) nogil:
+                                       cnp.float64_t p0, cnp.float64_t p1,
+                                       Py_ssize_t s0, Py_ssize_t s1) noexcept nogil:
 
     cdef Py_ssize_t i
     cdef Py_ssize_t mean = 0
@@ -159,13 +159,13 @@ cdef inline void _kernel_subtract_mean(dtype_t_out* out, Py_ssize_t odepth,
 
 cdef inline void _kernel_median(dtype_t_out* out, Py_ssize_t odepth,
                                 Py_ssize_t[::1] histo,
-                                double pop, dtype_t g,
+                                cnp.float64_t pop, dtype_t g,
                                 Py_ssize_t n_bins, Py_ssize_t mid_bin,
-                                double p0, double p1,
-                                Py_ssize_t s0, Py_ssize_t s1) nogil:
+                                cnp.float64_t p0, cnp.float64_t p1,
+                                Py_ssize_t s0, Py_ssize_t s1) noexcept nogil:
 
     cdef Py_ssize_t i
-    cdef double sum = pop / 2.0
+    cdef cnp.float64_t sum = pop / 2.0
 
     if pop:
         for i in range(n_bins):
@@ -180,10 +180,10 @@ cdef inline void _kernel_median(dtype_t_out* out, Py_ssize_t odepth,
 
 cdef inline void _kernel_minimum(dtype_t_out* out, Py_ssize_t odepth,
                                  Py_ssize_t[::1] histo,
-                                 double pop, dtype_t g,
+                                 cnp.float64_t pop, dtype_t g,
                                  Py_ssize_t n_bins, Py_ssize_t mid_bin,
-                                 double p0, double p1,
-                                 Py_ssize_t s0, Py_ssize_t s1) nogil:
+                                 cnp.float64_t p0, cnp.float64_t p1,
+                                 Py_ssize_t s0, Py_ssize_t s1) noexcept nogil:
 
     cdef Py_ssize_t i
 
@@ -198,10 +198,10 @@ cdef inline void _kernel_minimum(dtype_t_out* out, Py_ssize_t odepth,
 
 cdef inline void _kernel_modal(dtype_t_out* out, Py_ssize_t odepth,
                                Py_ssize_t[::1] histo,
-                               double pop, dtype_t g,
+                               cnp.float64_t pop, dtype_t g,
                                Py_ssize_t n_bins, Py_ssize_t mid_bin,
-                               double p0, double p1,
-                               Py_ssize_t s0, Py_ssize_t s1) nogil:
+                               cnp.float64_t p0, cnp.float64_t p1,
+                               Py_ssize_t s0, Py_ssize_t s1) noexcept nogil:
 
     cdef Py_ssize_t hmax = 0, imax = 0
 
@@ -218,14 +218,14 @@ cdef inline void _kernel_modal(dtype_t_out* out, Py_ssize_t odepth,
 cdef inline void _kernel_enhance_contrast(dtype_t_out* out,
                                           Py_ssize_t odepth,
                                           Py_ssize_t[::1] histo,
-                                          double pop,
+                                          cnp.float64_t pop,
                                           dtype_t g,
                                           Py_ssize_t n_bins,
-                                          Py_ssize_t mid_bin, double p0,
-                                          double p1, Py_ssize_t s0,
-                                          Py_ssize_t s1) nogil:
+                                          Py_ssize_t mid_bin, cnp.float64_t p0,
+                                          cnp.float64_t p1, Py_ssize_t s0,
+                                          Py_ssize_t s1) noexcept nogil:
 
-    cdef Py_ssize_t i, imin, imax
+    cdef Py_ssize_t i, imin = 0, imax = 0
 
     if pop:
         for i in range(n_bins - 1, -1, -1):
@@ -246,20 +246,20 @@ cdef inline void _kernel_enhance_contrast(dtype_t_out* out,
 
 cdef inline void _kernel_pop(dtype_t_out* out, Py_ssize_t odepth,
                              Py_ssize_t[::1] histo,
-                             double pop, dtype_t g,
+                             cnp.float64_t pop, dtype_t g,
                              Py_ssize_t n_bins, Py_ssize_t mid_bin,
-                             double p0, double p1,
-                             Py_ssize_t s0, Py_ssize_t s1) nogil:
+                             cnp.float64_t p0, cnp.float64_t p1,
+                             Py_ssize_t s0, Py_ssize_t s1) noexcept nogil:
 
     out[0] = <dtype_t_out>pop
 
 
 cdef inline void _kernel_sum(dtype_t_out* out, Py_ssize_t odepth,
                              Py_ssize_t[::1] histo,
-                             double pop, dtype_t g,
+                             cnp.float64_t pop, dtype_t g,
                              Py_ssize_t n_bins, Py_ssize_t mid_bin,
-                             double p0, double p1,
-                             Py_ssize_t s0, Py_ssize_t s1) nogil:
+                             cnp.float64_t p0, cnp.float64_t p1,
+                             Py_ssize_t s0, Py_ssize_t s1) noexcept nogil:
 
     cdef Py_ssize_t i
     cdef Py_ssize_t sum = 0
@@ -274,10 +274,10 @@ cdef inline void _kernel_sum(dtype_t_out* out, Py_ssize_t odepth,
 
 cdef inline void _kernel_threshold(dtype_t_out* out, Py_ssize_t odepth,
                                    Py_ssize_t[::1] histo,
-                                   double pop, dtype_t g,
+                                   cnp.float64_t pop, dtype_t g,
                                    Py_ssize_t n_bins, Py_ssize_t mid_bin,
-                                   double p0, double p1,
-                                   Py_ssize_t s0, Py_ssize_t s1) nogil:
+                                   cnp.float64_t p0, cnp.float64_t p1,
+                                   Py_ssize_t s0, Py_ssize_t s1) noexcept nogil:
 
     cdef Py_ssize_t i
     cdef Py_ssize_t mean = 0
@@ -292,10 +292,10 @@ cdef inline void _kernel_threshold(dtype_t_out* out, Py_ssize_t odepth,
 
 cdef inline void _kernel_noise_filter(dtype_t_out* out, Py_ssize_t odepth,
                                       Py_ssize_t[::1] histo,
-                                      double pop, dtype_t g,
+                                      cnp.float64_t pop, dtype_t g,
                                       Py_ssize_t n_bins, Py_ssize_t mid_bin,
-                                      double p0, double p1,
-                                      Py_ssize_t s0, Py_ssize_t s1) nogil:
+                                      cnp.float64_t p0, cnp.float64_t p1,
+                                      Py_ssize_t s0, Py_ssize_t s1) noexcept nogil:
 
     cdef Py_ssize_t i
     cdef Py_ssize_t min_i
@@ -320,12 +320,12 @@ cdef inline void _kernel_noise_filter(dtype_t_out* out, Py_ssize_t odepth,
 
 cdef inline void _kernel_entropy(dtype_t_out* out, Py_ssize_t odepth,
                                  Py_ssize_t[::1] histo,
-                                 double pop, dtype_t g,
+                                 cnp.float64_t pop, dtype_t g,
                                  Py_ssize_t n_bins, Py_ssize_t mid_bin,
-                                 double p0, double p1,
-                                 Py_ssize_t s0, Py_ssize_t s1) nogil:
+                                 cnp.float64_t p0, cnp.float64_t p1,
+                                 Py_ssize_t s0, Py_ssize_t s1) noexcept nogil:
     cdef Py_ssize_t i
-    cdef double e, p
+    cdef cnp.float64_t e, p
 
     if pop:
         e = 0.
@@ -340,14 +340,14 @@ cdef inline void _kernel_entropy(dtype_t_out* out, Py_ssize_t odepth,
 
 cdef inline void _kernel_otsu(dtype_t_out* out, Py_ssize_t odepth,
                               Py_ssize_t[::1] histo,
-                              double pop, dtype_t g,
+                              cnp.float64_t pop, dtype_t g,
                               Py_ssize_t n_bins, Py_ssize_t mid_bin,
-                              double p0, double p1,
-                              Py_ssize_t s0, Py_ssize_t s1) nogil:
+                              cnp.float64_t p0, cnp.float64_t p1,
+                              Py_ssize_t s0, Py_ssize_t s1) noexcept nogil:
     cdef Py_ssize_t i
     cdef Py_ssize_t max_i
     cdef Py_ssize_t P, q1, mu1, mu2, mu = 0
-    cdef double sigma_b, max_sigma_b, t
+    cdef cnp.float64_t sigma_b, max_sigma_b, t
 
     # compute local mean
     if pop:
@@ -386,13 +386,12 @@ cdef inline void _kernel_otsu(dtype_t_out* out, Py_ssize_t odepth,
 
 cdef inline void _kernel_win_hist(dtype_t_out* out, Py_ssize_t odepth,
                                   Py_ssize_t[::1] histo,
-                                  double pop, dtype_t g,
+                                  cnp.float64_t pop, dtype_t g,
                                   Py_ssize_t n_bins, Py_ssize_t mid_bin,
-                                  double p0, double p1,
-                                  Py_ssize_t s0, Py_ssize_t s1) nogil:
+                                  cnp.float64_t p0, cnp.float64_t p1,
+                                  Py_ssize_t s0, Py_ssize_t s1) noexcept nogil:
     cdef Py_ssize_t i
-    cdef Py_ssize_t max_i
-    cdef double scale
+    cdef cnp.float64_t scale
     if pop:
         scale = 1.0 / pop
         for i in xrange(odepth):
@@ -404,10 +403,10 @@ cdef inline void _kernel_win_hist(dtype_t_out* out, Py_ssize_t odepth,
 
 cdef inline void _kernel_majority(dtype_t_out* out, Py_ssize_t odepth,
                                   Py_ssize_t[::1] histo,
-                                  double pop, dtype_t g,
+                                  cnp.float64_t pop, dtype_t g,
                                   Py_ssize_t n_bins, Py_ssize_t mid_bin,
-                                  double p0, double p1,
-                                  Py_ssize_t s0, Py_ssize_t s1) nogil:
+                                  cnp.float64_t p0, cnp.float64_t p1,
+                                  Py_ssize_t s0, Py_ssize_t s1) noexcept nogil:
 
     cdef Py_ssize_t i
     cdef Py_ssize_t votes

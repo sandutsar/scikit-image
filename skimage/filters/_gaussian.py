@@ -1,20 +1,21 @@
-from collections.abc import Iterable
-
 import numpy as np
-from scipy import ndimage as ndi
 
-from .._shared import utils
 from .._shared.filters import gaussian
-from .._shared.utils import _supported_float_type, convert_to_float, warn
 from ..util import img_as_float
 
 __all__ = ['gaussian', 'difference_of_gaussians']
 
 
-@utils.deprecate_multichannel_kwarg()
-def difference_of_gaussians(image, low_sigma, high_sigma=None, *,
-                            mode='nearest', cval=0, channel_axis=None,
-                            truncate=4.0, multichannel=False):
+def difference_of_gaussians(
+    image,
+    low_sigma,
+    high_sigma=None,
+    *,
+    mode='nearest',
+    cval=0,
+    channel_axis=None,
+    truncate=4.0,
+):
     """Find features between ``low_sigma`` and ``high_sigma`` in size.
 
     This function uses the Difference of Gaussians method for applying
@@ -57,11 +58,6 @@ def difference_of_gaussians(image, low_sigma, high_sigma=None, *,
            ``channel_axis`` was added in 0.19.
     truncate : float, optional (default is 4.0)
         Truncate the filter at this many standard deviations.
-    multichannel : bool, optional (default: False)
-        Whether the last axis of the image is to be interpreted as multiple
-        channels. If True, each channel is filtered separately (channels are
-        not mixed together). This argument is deprecated: specify
-        `channel_axis` instead.
 
     Returns
     -------
@@ -131,25 +127,42 @@ def difference_of_gaussians(image, low_sigma, high_sigma=None, *,
         spatial_dims = image.ndim
 
     if len(low_sigma) != 1 and len(low_sigma) != spatial_dims:
-        raise ValueError('low_sigma must have length equal to number of'
-                         ' spatial dimensions of input')
+        raise ValueError(
+            'low_sigma must have length equal to number of'
+            ' spatial dimensions of input'
+        )
     if len(high_sigma) != 1 and len(high_sigma) != spatial_dims:
-        raise ValueError('high_sigma must have length equal to number of'
-                         ' spatial dimensions of input')
+        raise ValueError(
+            'high_sigma must have length equal to number of'
+            ' spatial dimensions of input'
+        )
 
     low_sigma = low_sigma * np.ones(spatial_dims)
     high_sigma = high_sigma * np.ones(spatial_dims)
 
     if any(high_sigma < low_sigma):
-        raise ValueError('high_sigma must be equal to or larger than'
-                         'low_sigma for all axes')
+        raise ValueError(
+            'high_sigma must be equal to or larger than' 'low_sigma for all axes'
+        )
 
-    im1 = gaussian(image, low_sigma, mode=mode, cval=cval,
-                   channel_axis=channel_axis, truncate=truncate,
-                   preserve_range=False)
+    im1 = gaussian(
+        image,
+        sigma=low_sigma,
+        mode=mode,
+        cval=cval,
+        channel_axis=channel_axis,
+        truncate=truncate,
+        preserve_range=False,
+    )
 
-    im2 = gaussian(image, high_sigma, mode=mode, cval=cval,
-                   channel_axis=channel_axis, truncate=truncate,
-                   preserve_range=False)
+    im2 = gaussian(
+        image,
+        sigma=high_sigma,
+        mode=mode,
+        cval=cval,
+        channel_axis=channel_axis,
+        truncate=truncate,
+        preserve_range=False,
+    )
 
     return im1 - im2

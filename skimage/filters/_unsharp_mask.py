@@ -16,9 +16,9 @@ def _unsharp_mask_single_channel(image, radius, amount, vrange):
     return result
 
 
-@utils.deprecate_multichannel_kwarg(multichannel_position=3)
-def unsharp_mask(image, radius=1.0, amount=1.0, multichannel=False,
-                 preserve_range=False, *, channel_axis=None):
+def unsharp_mask(
+    image, radius=1.0, amount=1.0, preserve_range=False, *, channel_axis=None
+):
     """Unsharp masking filter.
 
     The sharp details are identified as the difference between the original
@@ -27,7 +27,7 @@ def unsharp_mask(image, radius=1.0, amount=1.0, multichannel=False,
 
     Parameters
     ----------
-    image : [P, ..., ]M[, N][, C] ndarray
+    image : (M[, ...][, C]) ndarray
         Input image.
     radius : scalar or sequence of scalars, optional
         If a scalar is given, then its value is used for all dimensions.
@@ -38,10 +38,6 @@ def unsharp_mask(image, radius=1.0, amount=1.0, multichannel=False,
     amount : scalar, optional
         The details will be amplified with this factor. The factor could be 0
         or negative. Typically, it is a small positive number, e.g. 1.0.
-    multichannel : bool, optional
-        If True, the last ``image`` dimension is considered as a color channel,
-        otherwise as spatial. Color channels are processed individually.
-        This argument is deprecated: specify `channel_axis` instead.
     preserve_range : bool, optional
         Whether to keep the original range of values. Otherwise, the input
         image is converted according to the conventions of ``img_as_float``.
@@ -56,7 +52,7 @@ def unsharp_mask(image, radius=1.0, amount=1.0, multichannel=False,
 
     Returns
     -------
-    output : [P, ..., ]M[, N][, C] ndarray of float
+    output : (M[, ...][, C]) ndarray of float
         Image with unsharp mask applied.
 
     Notes
@@ -131,16 +127,15 @@ def unsharp_mask(image, radius=1.0, amount=1.0, multichannel=False,
         fimg = img_as_float(image).astype(float_dtype, copy=False)
         negative = np.any(fimg < 0)
         if negative:
-            vrange = [-1., 1.]
+            vrange = [-1.0, 1.0]
         else:
-            vrange = [0., 1.]
+            vrange = [0.0, 1.0]
 
     if channel_axis is not None:
         result = np.empty_like(fimg, dtype=float_dtype)
         for channel in range(image.shape[channel_axis]):
             sl = utils.slice_at_axis(channel, channel_axis)
-            result[sl] = _unsharp_mask_single_channel(
-                fimg[sl], radius, amount, vrange)
+            result[sl] = _unsharp_mask_single_channel(fimg[sl], radius, amount, vrange)
         return result
     else:
         return _unsharp_mask_single_channel(fimg, radius, amount, vrange)

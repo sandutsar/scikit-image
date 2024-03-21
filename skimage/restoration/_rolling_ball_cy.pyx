@@ -1,4 +1,5 @@
-import numpy as np
+import math
+
 cimport cython
 from libc.math cimport isnan, INFINITY
 from cython.parallel cimport prange
@@ -14,7 +15,7 @@ cdef inline Py_ssize_t ind2ind(
     Py_ssize_t from_index,
     Py_ssize_t offset,
     Py_ssize_t[::1] from_shape,
-    Py_ssize_t[::1] to_shape) nogil:
+    Py_ssize_t[::1] to_shape) noexcept nogil:
     """Convert the flat index of one array to a flat index of another array.
 
     The primary use case for this is if one array is a view into the other
@@ -29,7 +30,7 @@ cdef inline Py_ssize_t ind2ind(
             shape=to_shape
         ) + offset
 
-    However, it doesn't perform boundary checks or type checks; if missused this
+    However, it doesn't perform boundary checks or type checks; if misused this
     can cause a segfault.
 
     Parameters
@@ -124,7 +125,7 @@ def apply_kernel_nan(DTYPE_FLOAT[::1] img not None,
     out_data_size = out.size
 
     cdef Py_ssize_t ndim = kernel_shape.shape[0]
-    cdef Py_ssize_t kernel_leading_dims = np.prod(kernel_shape[0:(ndim - 1)])
+    cdef Py_ssize_t kernel_leading_dims = math.prod(kernel_shape[0:(ndim - 1)])
     cdef Py_ssize_t kernel_last_dim = kernel_shape[ndim - 1]
     cdef Py_ssize_t ker_idx_leading, ker_idx_last
 
@@ -213,7 +214,7 @@ def apply_kernel(DTYPE_FLOAT[::1] img not None,
     out_data_size = out.size
 
     cdef Py_ssize_t ndim = kernel_shape.shape[0]
-    cdef Py_ssize_t kernel_leading_dims = np.prod(kernel_shape[0:(ndim - 1)])
+    cdef Py_ssize_t kernel_leading_dims = math.prod(kernel_shape[0:(ndim - 1)])
     cdef Py_ssize_t kernel_last_dim = kernel_shape[ndim - 1]
     cdef Py_ssize_t ker_idx_leading, ker_idx_last
 

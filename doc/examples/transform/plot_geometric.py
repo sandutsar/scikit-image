@@ -29,8 +29,7 @@ from skimage import transform
 #
 # First we create a transformation using explicit parameters:
 
-tform = transform.SimilarityTransform(scale=1, rotation=math.pi/2,
-                                      translation=(0, 1))
+tform = transform.SimilarityTransform(scale=1, rotation=math.pi / 2, translation=(0, 1))
 print(tform.params)
 
 ######################################################################
@@ -58,8 +57,9 @@ print(tform2.inverse(tform(coord)))
 
 text = data.text()
 
-tform = transform.SimilarityTransform(scale=1, rotation=math.pi/4,
-                                      translation=(text.shape[0]/2, -100))
+tform = transform.SimilarityTransform(
+    scale=1, rotation=math.pi / 4, translation=(text.shape[0] / 2, -100)
+)
 
 rotated = transform.warp(text, tform)
 back_rotated = transform.warp(rotated, tform.inverse)
@@ -117,7 +117,7 @@ plt.show()
 
 ######################################################################
 # The above estimation relies on accurate knowledge of the location of points
-# and an accurate selection of their correspondance. If point locations have
+# and an accurate selection of their correspondence. If point locations have
 # an uncertainty associated with them, then weighting can be provided so that
 # the resulting transform prioritises an accurate fit to those points with the
 # highest weighting.

@@ -1,6 +1,5 @@
 from scipy import ndimage
 from ._ccomp import label_cython as clabel
-from .._shared.utils import deprecate_kwarg
 
 
 def _label_bool(image, background=None, return_num=False, connectivity=None):
@@ -9,6 +8,7 @@ def _label_bool(image, background=None, return_num=False, connectivity=None):
     See context: https://github.com/scikit-image/scikit-image/issues/4833
     """
     from ..morphology._util import _resolve_neighborhood
+
     if background == 1:
         image = ~image
 
@@ -30,7 +30,6 @@ def _label_bool(image, background=None, return_num=False, connectivity=None):
         return result[0]
 
 
-@deprecate_kwarg({"input": "label_image"}, removed_version="1.0")
 def label(label_image, background=None, return_num=False, connectivity=None):
     r"""Label connected regions of an integer array.
 
@@ -74,8 +73,8 @@ def label(label_image, background=None, return_num=False, connectivity=None):
 
     See Also
     --------
-    regionprops
-    regionprops_table
+    skimage.measure.regionprops
+    skimage.measure.regionprops_table
 
     References
     ----------
@@ -116,7 +115,11 @@ def label(label_image, background=None, return_num=False, connectivity=None):
      [0 0 0]]
     """
     if label_image.dtype == bool:
-        return _label_bool(label_image, background=background,
-                           return_num=return_num, connectivity=connectivity)
+        return _label_bool(
+            label_image,
+            background=background,
+            return_num=return_num,
+            connectivity=connectivity,
+        )
     else:
         return clabel(label_image, background, return_num, connectivity)

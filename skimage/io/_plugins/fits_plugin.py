@@ -8,7 +8,8 @@ except ImportError:
     raise ImportError(
         "Astropy could not be found. It is needed to read FITS files.\n"
         "Please refer to https://www.astropy.org for installation\n"
-        "instructions.")
+        "instructions."
+    )
 
 
 def imread(fname):
@@ -37,18 +38,15 @@ def imread(fname):
 
     """
 
-    hdulist = fits.open(fname)
-
-    # Iterate over FITS image extensions, ignoring any other extension types
-    # such as binary tables, and get the first image data array:
-    img_array = None
-    for hdu in hdulist:
-        if isinstance(hdu, fits.ImageHDU) or \
-           isinstance(hdu, fits.PrimaryHDU):
-            if hdu.data is not None:
-                img_array = hdu.data
-                break
-    hdulist.close()
+    with fits.open(fname) as hdulist:
+        # Iterate over FITS image extensions, ignoring any other extension types
+        # such as binary tables, and get the first image data array:
+        img_array = None
+        for hdu in hdulist:
+            if isinstance(hdu, fits.ImageHDU) or isinstance(hdu, fits.PrimaryHDU):
+                if hdu.data is not None:
+                    img_array = hdu.data
+                    break
 
     return img_array
 
@@ -84,22 +82,21 @@ def imread_collection(load_pattern, conserve_memory=True):
     # files and finding the image extensions in each one:
     ext_list = []
     for filename in load_pattern:
-        hdulist = fits.open(filename)
-        for n, hdu in zip(range(len(hdulist)), hdulist):
-            if isinstance(hdu, fits.ImageHDU) or \
-               isinstance(hdu, fits.PrimaryHDU):
-                # Ignore (primary) header units with no data (use '.size'
-                # rather than '.data' to avoid actually loading the image):
-                try:
-                    data_size = hdu.size  # size is int in Astropy 3.1.2
-                except TypeError:
-                    data_size = hdu.size()
-                if data_size > 0:
-                    ext_list.append((filename, n))
-        hdulist.close()
+        with fits.open(filename) as hdulist:
+            for n, hdu in zip(range(len(hdulist)), hdulist):
+                if isinstance(hdu, fits.ImageHDU) or isinstance(hdu, fits.PrimaryHDU):
+                    # Ignore (primary) header units with no data (use '.size'
+                    # rather than '.data' to avoid actually loading the image):
+                    try:
+                        data_size = hdu.size  # size is int in Astropy 3.1.2
+                    except TypeError:
+                        data_size = hdu.size()
+                    if data_size > 0:
+                        ext_list.append((filename, n))
 
-    return io.ImageCollection(ext_list, load_func=FITSFactory,
-                              conserve_memory=conserve_memory)
+    return io.ImageCollection(
+        ext_list, load_func=FITSFactory, conserve_memory=conserve_memory
+    )
 
 
 def FITSFactory(image_ext):
@@ -126,17 +123,13 @@ def FITSFactory(image_ext):
     filename = image_ext[0]
     extnum = image_ext[1]
 
-    if type(filename) is not str or type(extnum) is not int:
+    if not (isinstance(filename, str) and isinstance(extnum, int)):
         raise ValueError("Expected a (filename, extension) tuple")
 
-    hdulist = fits.open(filename)
-
-    data = hdulist[extnum].data
-
-    hdulist.close()
+    with fits.open(filename) as hdulist:
+        data = hdulist[extnum].data
 
     if data is None:
-        raise RuntimeError(
-            "Extension %d of %s has no data" % (extnum, filename))
+        raise RuntimeError(f"Extension {extnum} of {filename} has no data")
 
     return data

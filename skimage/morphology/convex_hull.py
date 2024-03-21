@@ -1,19 +1,12 @@
 """Convex Hull."""
 from itertools import product
 import numpy as np
-from scipy.spatial import ConvexHull
+from scipy.spatial import ConvexHull, QhullError
 from ..measure.pnpoly import grid_points_in_poly
 from ._convex_hull import possible_hull
 from ..measure._label import label
 from ..util import unique_rows
 from .._shared.utils import warn
-
-try:
-    # Should be public API of scipy spatial once #15003 is released
-    # see https://github.com/scipy/scipy/pull/15003
-    from scipy.spatial import QhullError
-except ImportError:
-    from scipy.spatial.qhull import QhullError
 
 __all__ = ['convex_hull_image', 'convex_hull_object']
 
@@ -77,7 +70,9 @@ def _check_coords_in_hull(gridcoords, hull_equations, tolerance):
     return coords_in_hull
 
 
-def convex_hull_image(image, offset_coordinates=True, tolerance=1e-10):
+def convex_hull_image(
+    image, offset_coordinates=True, tolerance=1e-10, include_borders=True
+):
     """Compute the convex hull image of a binary image.
 
     The convex hull is the set of pixels included in the smallest convex
@@ -95,6 +90,8 @@ def convex_hull_image(image, offset_coordinates=True, tolerance=1e-10):
         Tolerance when determining whether a point is inside the hull. Due
         to numerical floating point errors, a tolerance of 0 can result in
         some points erroneously being classified as being outside the hull.
+    include_borders: bool, optional
+        If ``False``, vertices/edges are excluded from the final hull mask.
 
     Returns
     -------
@@ -108,8 +105,11 @@ def convex_hull_image(image, offset_coordinates=True, tolerance=1e-10):
     """
     ndim = image.ndim
     if np.count_nonzero(image) == 0:
-        warn("Input image is entirely zero, no valid convex hull. "
-             "Returning empty image", UserWarning)
+        warn(
+            "Input image is entirely zero, no valid convex hull. "
+            "Returning empty image",
+            UserWarning,
+        )
         return np.zeros(image.shape, dtype=bool)
     # In 2D, we do an optimisation by choosing only pixels that are
     # the starting or ending pixel of a row or column.  This vastly
@@ -125,9 +125,11 @@ def convex_hull_image(image, offset_coordinates=True, tolerance=1e-10):
             try:
                 hull0 = ConvexHull(coords)
             except QhullError as err:
-                warn(f"Failed to get convex hull image. "
-                     f"Returning empty image, see error message below:\n"
-                     f"{err}")
+                warn(
+                    f"Failed to get convex hull image. "
+                    f"Returning empty image, see error message below:\n"
+                    f"{err}"
+                )
                 return np.zeros(image.shape, dtype=bool)
             coords = hull0.points[hull0.vertices]
 
@@ -144,21 +146,24 @@ def convex_hull_image(image, offset_coordinates=True, tolerance=1e-10):
     try:
         hull = ConvexHull(coords)
     except QhullError as err:
-        warn(f"Failed to get convex hull image. "
-             f"Returning empty image, see error message below:\n"
-             f"{err}")
+        warn(
+            f"Failed to get convex hull image. "
+            f"Returning empty image, see error message below:\n"
+            f"{err}"
+        )
         return np.zeros(image.shape, dtype=bool)
     vertices = hull.points[hull.vertices]
 
     # If 2D, use fast Cython function to locate convex hull pixels
     if ndim == 2:
-        mask = grid_points_in_poly(image.shape, vertices)
+        labels = grid_points_in_poly(image.shape, vertices, binarize=False)
+        # If include_borders is True, we include vertices (2) and edge
+        # points (3) in the mask, otherwise only the inside of the hull (1)
+        mask = labels >= 1 if include_borders else labels == 1
     else:
-        gridcoords = np.reshape(np.mgrid[tuple(map(slice, image.shape))],
-                                (ndim, -1))
+        gridcoords = np.reshape(np.mgrid[tuple(map(slice, image.shape))], (ndim, -1))
 
-        coords_in_hull = _check_coords_in_hull(gridcoords,
-                                               hull.equations, tolerance)
+        coords_in_hull = _check_coords_in_hull(gridcoords, hull.equations, tolerance)
         mask = np.reshape(coords_in_hull, image.shape)
 
     return mask

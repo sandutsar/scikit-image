@@ -1,10 +1,9 @@
 """Implementations restoration functions"""
-import warnings
 
 import numpy as np
 from scipy.signal import convolve
 
-from .._shared.utils import _supported_float_type, deprecate_kwarg
+from .._shared.utils import _supported_float_type
 from . import uft
 
 
@@ -16,16 +15,16 @@ def wiener(image, psf, balance, reg=None, is_real=True, clip=True):
 
     Parameters
     ----------
-    image : (M, N) ndarray
-       Input degraded image
+    image : ndarray
+       Input degraded image (can be n-dimensional).
     psf : ndarray
        Point Spread Function. This is assumed to be the impulse
        response (input image space) if the data-type is real, or the
        transfer function (Fourier space) if the data-type is
        complex. There is no constraints on the shape of the impulse
-       response. The transfer function must be of shape `(M, N)` if
-       `is_real is True`, `(M, N // 2 + 1)` otherwise (see
-       `np.fft.rfftn`).
+       response. The transfer function must be of shape
+       `(N1, N2, ..., ND)` if `is_real is True`,
+       `(N1, N2, ..., ND // 2 + 1)` otherwise (see `np.fft.rfftn`).
     balance : float
        The regularisation parameter value that tunes the balance
        between the data adequacy that improve frequency restoration
@@ -60,7 +59,7 @@ def wiener(image, psf, balance, reg=None, is_real=True, clip=True):
     >>> img = convolve2d(img, psf, 'same')
     >>> rng = np.random.default_rng()
     >>> img += 0.1 * img.std() * rng.standard_normal(img.shape)
-    >>> deconvolved_img = restoration.wiener(img, psf, 1100)
+    >>> deconvolved_img = restoration.wiener(img, psf, 0.1)
 
     Notes
     -----
@@ -73,7 +72,7 @@ def wiener(image, psf, balance, reg=None, is_real=True, clip=True):
     unknown original image, the Wiener filter is
 
     .. math::
-       \hat x = F^\dagger (|\Lambda_H|^2 + \lambda |\Lambda_D|^2)
+       \hat x = F^\dagger \left( |\Lambda_H|^2 + \lambda |\Lambda_D|^2 \right)^{-1}
        \Lambda_H^\dagger F y
 
     where :math:`F` and :math:`F^\dagger` are the Fourier and inverse
@@ -86,7 +85,7 @@ def wiener(image, psf, balance, reg=None, is_real=True, clip=True):
     those coming from noise), and the regularization.
 
     These methods are then specific to a prior model. Consequently,
-    the application or the true image nature must corresponds to the
+    the application or the true image nature must correspond to the
     prior model. By default, the prior model (Laplacian) introduce
     image smoothness or pixel correlation. It can also be interpreted
     as high-frequency penalization to compensate the instability of
@@ -94,7 +93,7 @@ def wiener(image, psf, balance, reg=None, is_real=True, clip=True):
     amplification or "explosive" solution).
 
     Finally, the use of Fourier space implies a circulant property of
-    :math:`H`, see [Hunt].
+    :math:`H`, see [2]_.
 
     References
     ----------
@@ -105,7 +104,7 @@ def wiener(image, psf, balance, reg=None, is_real=True, clip=True):
 
            https://www.osapublishing.org/josaa/abstract.cfm?URI=josaa-27-7-1593
 
-           http://research.orieux.fr/files/papers/OGR-JOSA10.pdf
+           https://hal.archives-ouvertes.fr/hal-00674508
 
     .. [2] B. R. Hunt "A matrix theory proof of the discrete
            convolution theorem", IEEE Trans. on Audio and
@@ -125,13 +124,13 @@ def wiener(image, psf, balance, reg=None, is_real=True, clip=True):
     else:
         trans_func = psf
 
-    wiener_filter = np.conj(trans_func) / (np.abs(trans_func) ** 2 +
-                                           balance * np.abs(reg) ** 2)
+    wiener_filter = np.conj(trans_func) / (
+        np.abs(trans_func) ** 2 + balance * np.abs(reg) ** 2
+    )
     if is_real:
-        deconv = uft.uirfft2(wiener_filter * uft.urfft2(image),
-                             shape=image.shape)
+        deconv = uft.uirfftn(wiener_filter * uft.urfftn(image), shape=image.shape)
     else:
-        deconv = uft.uifft2(wiener_filter * uft.ufft2(image))
+        deconv = uft.uifftn(wiener_filter * uft.ufftn(image))
 
     if clip:
         deconv[deconv > 1] = 1
@@ -140,8 +139,9 @@ def wiener(image, psf, balance, reg=None, is_real=True, clip=True):
     return deconv
 
 
-def unsupervised_wiener(image, psf, reg=None, user_params=None, is_real=True,
-                        clip=True, *, random_state=None):
+def unsupervised_wiener(
+    image, psf, reg=None, user_params=None, is_real=True, clip=True, *, rng=None
+):
     """Unsupervised Wiener-Hunt deconvolution.
 
     Return the deconvolution with a Wiener-Hunt approach, where the
@@ -166,13 +166,10 @@ def unsupervised_wiener(image, psf, reg=None, user_params=None, is_real=True,
     clip : boolean, optional
        True by default. If true, pixel values of the result above 1 or
        under -1 are thresholded for skimage pipeline compatibility.
-    random_state : {None, int, `numpy.random.Generator`}, optional
-        If `random_state` is None the `numpy.random.Generator` singleton is
-        used.
-        If `random_state` is an int, a new ``Generator`` instance is used,
-        seeded with `random_state`.
-        If `random_state` is already a ``Generator`` instance then that
-        instance is used.
+    rng : {`numpy.random.Generator`, int}, optional
+        Pseudo-random number generator.
+        By default, a PCG64 generator is used (see :func:`numpy.random.default_rng`).
+        If `rng` is an int, it is used to seed the generator.
 
         .. versionadded:: 0.19
 
@@ -228,7 +225,7 @@ def unsupervised_wiener(image, psf, reg=None, user_params=None, is_real=True,
     posterior law. The practical idea is to only draw highly probable
     images since they have the biggest contribution to the mean. At the
     opposite, the less probable images are drawn less often since
-    their contribution is low. Finally the empirical mean of these
+    their contribution is low. Finally, the empirical mean of these
     samples give us an estimation of the mean, and an exact
     computation with an infinite sample set.
 
@@ -241,22 +238,15 @@ def unsupervised_wiener(image, psf, reg=None, user_params=None, is_real=True,
 
            https://www.osapublishing.org/josaa/abstract.cfm?URI=josaa-27-7-1593
 
-           http://research.orieux.fr/files/papers/OGR-JOSA10.pdf
+           https://hal.archives-ouvertes.fr/hal-00674508
     """
-
-    if user_params is not None:
-        for s in ('max', 'min'):
-            if (s + '_iter') in user_params:
-                warning_msg = (
-                    f'`{s}_iter` is a deprecated key for `user_params`. '
-                    f'It will be removed in version 1.0. '
-                    f'Use `{s}_num_iter` instead.'
-                )
-                warnings.warn(warning_msg, FutureWarning)
-                user_params[s + '_num_iter'] = user_params.pop(s + '_iter')
-
-    params = {'threshold': 1e-4, 'max_num_iter': 200,
-              'min_num_iter': 30, 'burnin': 15, 'callback': None}
+    params = {
+        'threshold': 1e-4,
+        'max_num_iter': 200,
+        'min_num_iter': 30,
+        'burnin': 15,
+        'callback': None,
+    }
     params.update(user_params or {})
 
     if reg is None:
@@ -279,7 +269,7 @@ def unsupervised_wiener(image, psf, reg=None, user_params=None, is_real=True,
     prev_x_postmean = np.zeros(trans_fct.shape, dtype=float_type)
 
     # Difference between two successive mean
-    delta = np.NAN
+    delta = np.nan
 
     # Initial state of the chain
     gn_chain, gx_chain = [1], [1]
@@ -296,7 +286,7 @@ def unsupervised_wiener(image, psf, reg=None, user_params=None, is_real=True,
     else:
         data_spectrum = uft.ufft2(image)
 
-    rng = np.random.default_rng(random_state)
+    rng = np.random.default_rng(rng)
 
     # Gibbs sampling
     for iteration in range(params['max_num_iter']):
@@ -322,14 +312,17 @@ def unsupervised_wiener(image, psf, reg=None, user_params=None, is_real=True,
             params['callback'](x_sample)
 
         # sample of Eq. 31 p(gn | x^k, gx^k, y)
-        gn_chain.append(rng.gamma(image.size / 2,
-                                  2 / uft.image_quad_norm(data_spectrum
-                                                          - x_sample
-                                                          * trans_fct)))
+        gn_chain.append(
+            rng.gamma(
+                image.size / 2,
+                2 / uft.image_quad_norm(data_spectrum - x_sample * trans_fct),
+            )
+        )
 
         # sample of Eq. 31 p(gx | x^k, gn^k-1, y)
-        gx_chain.append(rng.gamma((image.size - 1) / 2,
-                                  2 / uft.image_quad_norm(x_sample * reg)))
+        gx_chain.append(
+            rng.gamma((image.size - 1) / 2, 2 / uft.image_quad_norm(x_sample * reg))
+        )
 
         # current empirical average
         if iteration > params['burnin']:
@@ -339,17 +332,16 @@ def unsupervised_wiener(image, psf, reg=None, user_params=None, is_real=True,
             current = x_postmean / (iteration - params['burnin'])
             previous = prev_x_postmean / (iteration - params['burnin'] - 1)
 
-            delta = (np.sum(np.abs(current - previous))
-                     / np.sum(np.abs(x_postmean))
-                     / (iteration - params['burnin']))
+            delta = (
+                np.sum(np.abs(current - previous))
+                / np.sum(np.abs(x_postmean))
+                / (iteration - params['burnin'])
+            )
 
         prev_x_postmean = x_postmean
 
         # stop of the algorithm
-        if (
-            (iteration > params['min_num_iter'])
-            and (delta < params['threshold'])
-        ):
+        if (iteration > params['min_num_iter']) and (delta < params['threshold']):
             break
 
     # Empirical average \approx POSTMEAN Eq. 44
@@ -366,14 +358,13 @@ def unsupervised_wiener(image, psf, reg=None, user_params=None, is_real=True,
     return (x_postmean, {'noise': gn_chain, 'prior': gx_chain})
 
 
-@deprecate_kwarg({'iterations': 'num_iter'}, removed_version="1.0")
 def richardson_lucy(image, psf, num_iter=50, clip=True, filter_epsilon=None):
     """Richardson-Lucy deconvolution.
 
     Parameters
     ----------
     image : ndarray
-       Input degraded image (can be N dimensional).
+       Input degraded image (can be n-dimensional).
     psf : ndarray
        The point spread function.
     num_iter : int, optional

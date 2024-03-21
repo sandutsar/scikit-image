@@ -4,35 +4,34 @@
 #cython: wraparound=False
 
 import numpy as np
-
 cimport numpy as cnp
-from libc.stdlib cimport malloc, free
 
 cnp.import_array()
 
-cdef inline dtype_t _max(dtype_t a, dtype_t b) nogil:
+
+cdef inline dtype_t _max(dtype_t a, dtype_t b) noexcept nogil:
     return a if a >= b else b
 
 
-cdef inline dtype_t _min(dtype_t a, dtype_t b) nogil:
+cdef inline dtype_t _min(dtype_t a, dtype_t b) noexcept nogil:
     return a if a <= b else b
 
 
-cdef inline void histogram_increment(Py_ssize_t[::1] histo, double* pop,
-                                     dtype_t value) nogil:
+cdef inline void histogram_increment(Py_ssize_t[::1] histo, cnp.float64_t* pop,
+                                     dtype_t value) noexcept nogil:
     histo[value] += 1
     pop[0] += 1
 
 
-cdef inline void histogram_decrement(Py_ssize_t[::1] histo, double* pop,
-                                     dtype_t value) nogil:
+cdef inline void histogram_decrement(Py_ssize_t[::1] histo, cnp.float64_t* pop,
+                                     dtype_t value) noexcept nogil:
     histo[value] -= 1
     pop[0] -= 1
 
 
 cdef inline char is_in_mask(Py_ssize_t rows, Py_ssize_t cols,
                             Py_ssize_t r, Py_ssize_t c,
-                            char* mask) nogil:
+                            char* mask) noexcept nogil:
     """Check whether given coordinate is within image and mask is true."""
     if r < 0 or r > rows - 1 or c < 0 or c > cols - 1:
         return 0
@@ -45,15 +44,15 @@ cdef inline char is_in_mask(Py_ssize_t rows, Py_ssize_t cols,
             return 0
 
 
-cdef void _core(void kernel(dtype_t_out*, Py_ssize_t, Py_ssize_t[::1], double,
-                            dtype_t, Py_ssize_t, Py_ssize_t, double,
-                            double, Py_ssize_t, Py_ssize_t) nogil,
+cdef void _core(void kernel(dtype_t_out*, Py_ssize_t, Py_ssize_t[::1], cnp.float64_t,
+                            dtype_t, Py_ssize_t, Py_ssize_t, cnp.float64_t,
+                            cnp.float64_t, Py_ssize_t, Py_ssize_t) noexcept nogil,
                 dtype_t[:, ::1] image,
                 char[:, ::1] footprint,
                 char[:, ::1] mask,
                 dtype_t_out[:, :, ::1] out,
                 signed char shift_x, signed char shift_y,
-                double p0, double p1,
+                cnp.float64_t p0, cnp.float64_t p1,
                 Py_ssize_t s0, Py_ssize_t s1,
                 Py_ssize_t n_bins) except *:
     """Compute histogram for each pixel neighborhood, apply kernel function and
@@ -83,10 +82,10 @@ cdef void _core(void kernel(dtype_t_out*, Py_ssize_t, Py_ssize_t[::1], double,
         mask_data = &mask[0, 0]
 
     # define local variable types
-    cdef Py_ssize_t r, c, rr, cc, s, value, local_max, i, even_row
+    cdef Py_ssize_t r, c, rr, cc, s, even_row
 
-    # number of pixels actually inside the neighborhood (double)
-    cdef double pop = 0
+    # number of pixels actually inside the neighborhood (cnp.float64_t)
+    cdef cnp.float64_t pop = 0
 
     # build attack and release borders by using difference along axis
     t = np.hstack((footprint, np.zeros((footprint.shape[0], 1))))

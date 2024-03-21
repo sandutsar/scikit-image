@@ -3,12 +3,12 @@
 Fundamental matrix estimation
 =============================
 
-This example demonstrates how to robustly estimate 
-`epipolar geometry <https://en.wikipedia.org/wiki/Epipolar_geometry>` 
+This example demonstrates how to robustly estimate
+`epipolar geometry <https://en.wikipedia.org/wiki/Epipolar_geometry>`
 (the geometry of stereo vision) between two views using sparse ORB feature
 correspondences.
 
-The `fundamental matrix <https://en.wikipedia.org/wiki/Fundamental_matrix_(computer_vision)>`_ 
+The `fundamental matrix <https://en.wikipedia.org/wiki/Fundamental_matrix_(computer_vision)>`_
 relates corresponding points between a pair of
 uncalibrated images. The matrix transforms homogeneous image points in one image
 to epipolar lines in the other image.
@@ -42,20 +42,26 @@ descriptor_extractor.detect_and_extract(img_right)
 keypoints_right = descriptor_extractor.keypoints
 descriptors_right = descriptor_extractor.descriptors
 
-matches = match_descriptors(descriptors_left, descriptors_right,
-                            cross_check=True)
+matches = match_descriptors(descriptors_left, descriptors_right, cross_check=True)
+
+print(f'Number of matches: {matches.shape[0]}')
 
 # Estimate the epipolar geometry between the left and right image.
+random_seed = 9
+rng = np.random.default_rng(random_seed)
 
-model, inliers = ransac((keypoints_left[matches[:, 0]],
-                         keypoints_right[matches[:, 1]]),
-                        FundamentalMatrixTransform, min_samples=8,
-                        residual_threshold=1, max_trials=5000)
+model, inliers = ransac(
+    (keypoints_left[matches[:, 0]], keypoints_right[matches[:, 1]]),
+    FundamentalMatrixTransform,
+    min_samples=8,
+    residual_threshold=1,
+    max_trials=5000,
+    rng=rng,
+)
 
 inlier_keypoints_left = keypoints_left[matches[inliers, 0]]
 inlier_keypoints_right = keypoints_right[matches[inliers, 1]]
 
-print(f'Number of matches: {matches.shape[0]}')
 print(f'Number of inliers: {inliers.sum()}')
 
 # Compare estimated sparse disparities to the dense ground-truth disparities.
@@ -72,8 +78,15 @@ fig, ax = plt.subplots(nrows=2, ncols=1)
 
 plt.gray()
 
-plot_matches(ax[0], img_left, img_right, keypoints_left, keypoints_right,
-             matches[inliers], only_matches=True)
+plot_matches(
+    ax[0],
+    img_left,
+    img_right,
+    keypoints_left,
+    keypoints_right,
+    matches[inliers],
+    only_matches=True,
+)
 ax[0].axis("off")
 ax[0].set_title("Inlier correspondences")
 

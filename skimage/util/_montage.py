@@ -7,9 +7,15 @@ __all__ = ['montage']
 
 
 @utils.channel_as_last_axis(multichannel_output=False)
-@utils.deprecate_multichannel_kwarg()
-def montage(arr_in, fill='mean', rescale_intensity=False, grid_shape=None,
-            padding_width=0, multichannel=False, *, channel_axis=None):
+def montage(
+    arr_in,
+    fill='mean',
+    rescale_intensity=False,
+    grid_shape=None,
+    padding_width=0,
+    *,
+    channel_axis=None,
+):
     """Create a montage of several single- or multichannel images.
 
     Create a rectangular montage from an input array representing an ensemble
@@ -33,7 +39,7 @@ def montage(arr_in, fill='mean', rescale_intensity=False, grid_shape=None,
 
     Parameters
     ----------
-    arr_in : (K, M, N[, C]) ndarray
+    arr_in : ndarray, shape (K, M, N[, C])
         An array representing an ensemble of `K` images of equal shape.
     fill : float or array-like of floats or 'mean', optional
         Value to fill the padding areas and/or the extra tiles in
@@ -49,16 +55,10 @@ def montage(arr_in, fill='mean', rescale_intensity=False, grid_shape=None,
         The size of the spacing between the tiles and between the tiles and
         the borders. If non-zero, makes the boundaries of individual images
         easier to perceive.
-    multichannel : boolean, optional
-        If True, the last `arr_in` dimension is threated as a color channel,
-        otherwise as spatial. This argument is deprecated: specify
-        `channel_axis` instead.
     channel_axis : int or None, optional
         If None, the image is assumed to be a grayscale (single channel) image.
         Otherwise, this parameter indicates which axis of the array corresponds
         to channels.
-
-
 
     Returns
     -------
@@ -101,14 +101,16 @@ def montage(arr_in, fill='mean', rescale_intensity=False, grid_shape=None,
         arr_in = np.asarray(arr_in)[..., np.newaxis]
 
     if arr_in.ndim != 4:
-        raise ValueError('Input array has to be 3-dimensional for grayscale '
-                         'images, or 4-dimensional with a `channel_axis` '
-                         'specified.')
+        raise ValueError(
+            'Input array has to be 3-dimensional for grayscale '
+            'images, or 4-dimensional with a `channel_axis` '
+            'specified.'
+        )
 
     n_images, n_rows, n_cols, n_chan = arr_in.shape
 
     if grid_shape:
-        ntiles_row, ntiles_col = [int(s) for s in grid_shape]
+        ntiles_row, ntiles_col = (int(s) for s in grid_shape)
     else:
         ntiles_row = ntiles_col = int(np.ceil(np.sqrt(n_images)))
 
@@ -124,18 +126,25 @@ def montage(arr_in, fill='mean', rescale_intensity=False, grid_shape=None,
 
     # Pre-allocate an array with padding for montage
     n_pad = padding_width
-    arr_out = np.empty(((n_rows + n_pad) * ntiles_row + n_pad,
-                        (n_cols + n_pad) * ntiles_col + n_pad,
-                        n_chan), dtype=arr_in.dtype)
+    arr_out = np.empty(
+        (
+            (n_rows + n_pad) * ntiles_row + n_pad,
+            (n_cols + n_pad) * ntiles_col + n_pad,
+            n_chan,
+        ),
+        dtype=arr_in.dtype,
+    )
     for idx_chan in range(n_chan):
         arr_out[..., idx_chan] = fill[idx_chan]
 
-    slices_row = [slice(n_pad + (n_rows + n_pad) * n,
-                        n_pad + (n_rows + n_pad) * n + n_rows)
-                  for n in range(ntiles_row)]
-    slices_col = [slice(n_pad + (n_cols + n_pad) * n,
-                        n_pad + (n_cols + n_pad) * n + n_cols)
-                  for n in range(ntiles_col)]
+    slices_row = [
+        slice(n_pad + (n_rows + n_pad) * n, n_pad + (n_rows + n_pad) * n + n_rows)
+        for n in range(ntiles_row)
+    ]
+    slices_col = [
+        slice(n_pad + (n_cols + n_pad) * n, n_pad + (n_cols + n_pad) * n + n_cols)
+        for n in range(ntiles_col)
+    ]
 
     # Copy the data to the output array
     for idx_image, image in enumerate(arr_in):

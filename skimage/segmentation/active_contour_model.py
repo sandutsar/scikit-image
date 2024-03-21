@@ -1,19 +1,25 @@
 import numpy as np
 from scipy.interpolate import RectBivariateSpline
 
-from .._shared.utils import _supported_float_type, deprecate_kwarg
+from .._shared.utils import _supported_float_type
 from ..util import img_as_float
 from ..filters import sobel
 
 
-@deprecate_kwarg({'max_iterations': 'max_num_iter'}, removed_version="1.0")
-def active_contour(image, snake, alpha=0.01, beta=0.1,
-                   w_line=0, w_edge=1, gamma=0.01,
-                   max_px_move=1.0,
-                   max_num_iter=2500, convergence=0.1,
-                   *,
-                   boundary_condition='periodic',
-                   coordinates='rc'):
+def active_contour(
+    image,
+    snake,
+    alpha=0.01,
+    beta=0.1,
+    w_line=0,
+    w_edge=1,
+    gamma=0.01,
+    max_px_move=1.0,
+    max_num_iter=2500,
+    convergence=0.1,
+    *,
+    boundary_condition='periodic',
+):
     """Active contour model.
 
     Active contours by fitting snakes to features of images. Supports single
@@ -25,9 +31,9 @@ def active_contour(image, snake, alpha=0.01, beta=0.1,
 
     Parameters
     ----------
-    image : (N, M) or (N, M, 3) ndarray
+    image : (M, N) or (M, N, 3) ndarray
         Input image.
-    snake : (N, 2) ndarray
+    snake : (K, 2) ndarray
         Initial snake coordinates. For periodic boundary conditions, endpoints
         must not be duplicated.
     alpha : float, optional
@@ -57,15 +63,10 @@ def active_contour(image, snake, alpha=0.01, beta=0.1,
         be combined by parsing 'fixed-free', 'free-fixed'. Parsing
         'fixed-fixed' or 'free-free' yields same behaviour as 'fixed' and
         'free', respectively.
-    coordinates : {'rc'}, optional
-        This option remains for compatibility purpose only and has no effect.
-        It was introduced in 0.16 with the ``'xy'`` option, but since 0.18,
-        only the ``'rc'`` option is valid.
-        Coordinates must be set in a row-column format.
 
     Returns
     -------
-    snake : (N, 2) ndarray
+    snake : (K, 2) ndarray
         Optimised snake, same shape as input parameter.
 
     References
@@ -84,7 +85,7 @@ def active_contour(image, snake, alpha=0.01, beta=0.1,
     >>> img = np.zeros((100, 100))
     >>> rr, cc = circle_perimeter(35, 45, 25)
     >>> img[rr, cc] = 1
-    >>> img = gaussian(img, 2, preserve_range=False)
+    >>> img = gaussian(img, sigma=2, preserve_range=False)
 
     Initialize spline:
 
@@ -93,24 +94,32 @@ def active_contour(image, snake, alpha=0.01, beta=0.1,
 
     Fit spline to image:
 
-    >>> snake = active_contour(img, init, w_edge=0, w_line=1, coordinates='rc')  # doctest: +SKIP
+    >>> snake = active_contour(img, init, w_edge=0, w_line=1)  # doctest: +SKIP
     >>> dist = np.sqrt((45-snake[:, 0])**2 + (35-snake[:, 1])**2)  # doctest: +SKIP
     >>> int(np.mean(dist))  # doctest: +SKIP
     25
 
     """
-    if coordinates != 'rc':
-        raise ValueError('Coordinate values must be set in a row column '
-                         'format. `coordinates` must be set to "rc".')
     max_num_iter = int(max_num_iter)
     if max_num_iter <= 0:
         raise ValueError("max_num_iter should be >0.")
     convergence_order = 10
-    valid_bcs = ['periodic', 'free', 'fixed', 'free-fixed',
-                 'fixed-free', 'fixed-fixed', 'free-free']
+    valid_bcs = [
+        'periodic',
+        'free',
+        'fixed',
+        'free-fixed',
+        'fixed-free',
+        'fixed-fixed',
+        'free-free',
+    ]
     if boundary_condition not in valid_bcs:
-        raise ValueError("Invalid boundary condition.\n" +
-                         "Should be one of: "+", ".join(valid_bcs)+'.')
+        raise ValueError(
+            "Invalid boundary condition.\n"
+            + "Should be one of: "
+            + ", ".join(valid_bcs)
+            + '.'
+        )
 
     img = img_as_float(image)
     float_dtype = _supported_float_type(image.dtype)
@@ -121,8 +130,7 @@ def active_contour(image, snake, alpha=0.01, beta=0.1,
     # Find edges using sobel:
     if w_edge != 0:
         if RGB:
-            edge = [sobel(img[:, :, 0]), sobel(img[:, :, 1]),
-                    sobel(img[:, :, 2])]
+            edge = [sobel(img[:, :, 0]), sobel(img[:, :, 1]), sobel(img[:, :, 2])]
         else:
             edge = [sobel(img)]
     else:
@@ -130,15 +138,14 @@ def active_contour(image, snake, alpha=0.01, beta=0.1,
 
     # Superimpose intensity and edge images:
     if RGB:
-        img = w_line*np.sum(img, axis=2) \
-            + w_edge*sum(edge)
+        img = w_line * np.sum(img, axis=2) + w_edge * sum(edge)
     else:
-        img = w_line*img + w_edge*edge[0]
+        img = w_line * img + w_edge * edge[0]
 
     # Interpolate for smoothness:
-    intp = RectBivariateSpline(np.arange(img.shape[1]),
-                               np.arange(img.shape[0]),
-                               img.T, kx=2, ky=2, s=0)
+    intp = RectBivariateSpline(
+        np.arange(img.shape[1]), np.arange(img.shape[0]), img.T, kx=2, ky=2, s=0
+    )
 
     snake_xy = snake[:, ::-1]
     x = snake_xy[:, 0].astype(float_dtype)
@@ -149,14 +156,16 @@ def active_contour(image, snake, alpha=0.01, beta=0.1,
 
     # Build snake shape matrix for Euler equation in double precision
     eye_n = np.eye(n, dtype=float)
-    a = (np.roll(eye_n, -1, axis=0)
-         + np.roll(eye_n, -1, axis=1)
-         - 2 * eye_n)  # second order derivative, central difference
-    b = (np.roll(eye_n, -2, axis=0)
-         + np.roll(eye_n, -2, axis=1)
-         - 4 * np.roll(eye_n, -1, axis=0)
-         - 4 * np.roll(eye_n, -1, axis=1)
-         + 6 * eye_n)  # fourth order derivative, central difference
+    a = (
+        np.roll(eye_n, -1, axis=0) + np.roll(eye_n, -1, axis=1) - 2 * eye_n
+    )  # second order derivative, central difference
+    b = (
+        np.roll(eye_n, -2, axis=0)
+        + np.roll(eye_n, -2, axis=1)
+        - 4 * np.roll(eye_n, -1, axis=0)
+        - 4 * np.roll(eye_n, -1, axis=1)
+        + 6 * eye_n
+    )  # fourth order derivative, central difference
     A = -alpha * a + beta * b
 
     # Impose boundary conditions different from periodic:
@@ -210,8 +219,8 @@ def active_contour(image, snake, alpha=0.01, beta=0.1,
         if efree:
             fx[-1] *= 2
             fy[-1] *= 2
-        xn = inv @ (gamma*x + fx)
-        yn = inv @ (gamma*y + fy)
+        xn = inv @ (gamma * x + fx)
+        yn = inv @ (gamma * y + fy)
 
         # Movements are capped to max_px_move per iteration:
         dx = max_px_move * np.tanh(xn - x)
@@ -232,8 +241,9 @@ def active_contour(image, snake, alpha=0.01, beta=0.1,
             xsave[j, :] = x
             ysave[j, :] = y
         else:
-            dist = np.min(np.max(np.abs(xsave - x[None, :])
-                                 + np.abs(ysave - y[None, :]), 1))
+            dist = np.min(
+                np.max(np.abs(xsave - x[None, :]) + np.abs(ysave - y[None, :]), 1)
+            )
             if dist < convergence:
                 break
 

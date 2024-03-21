@@ -1,38 +1,9 @@
 #cython: cdivision=True
 #cython: nonecheck=False
-"""Cython implementation of Dijkstra's minimum cost path algorithm,
-for use with data on a n-dimensional lattice.
-
-Original author: Zachary Pincus
-Inspired by code from Almar Klein
-Later modifications by Almar Klein (Dec 2013)
-
-License: BSD
-
-Copyright 2009 Zachary Pincus
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions
-are met:
-
-1. Redistributions of source code must retain the above copyright
-     notice, this list of conditions and the following disclaimer.
-2. Redistributions in binary form must reproduce the above copyright
-     notice, this list of conditions and the following disclaimer in the
-     documentation and/or other materials provided with the distribution.
-
-THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
-IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
-OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
-IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
-INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
-NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
-THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
-
+Cython implementation of Dijkstra's minimum cost path algorithm,
+for use with data on a n-dimensional lattice.
+"""
 import cython
 import numpy as np
 from . import heap
@@ -366,7 +337,7 @@ cdef class MCP:
 
         # Get starts and ends
         # We do not pass them in as arguments for backwards compat
-        starts, ends = self._starts, self._ends
+        starts, _ = self._starts, self._ends
 
         # push each start point into the heap. Note that we use flat indexing!
         for start in _ravel_index_fortran(starts, self.costs_shape):
@@ -390,7 +361,7 @@ cdef class MCP:
     cpdef int goal_reached(self, INDEX_T index, FLOAT_T cumcost):
         """ int goal_reached(int index, float cumcost)
         This method is called each iteration after popping an index
-        from the heap, before examining the neighbours.
+        from the heap, before examining the neighbors.
 
         This method can be overloaded to modify the behavior of the MCP
         algorithm. An example might be to stop the algorithm when a
@@ -398,14 +369,14 @@ cdef class MCP:
         certain distance away from the seed point.
 
         This method should return 1 if the algorithm should not check
-        the current point's neighbours and 2 if the algorithm is now
+        the current point's neighbors and 2 if the algorithm is now
         done.
         """
         return 0
 
 
     cdef void _examine_neighbor(self, INDEX_T index, INDEX_T new_index,
-                                FLOAT_T offset_length):
+                                FLOAT_T offset_length) noexcept:
         """ _examine_neighbor(int index, int new_index, float offset_length)
         This method is called once for every pair of neighboring nodes,
         as soon as both nodes become frozen.
@@ -414,7 +385,7 @@ cdef class MCP:
 
 
     cdef void _update_node(self, INDEX_T index, INDEX_T new_index,
-                           FLOAT_T offset_length):
+                           FLOAT_T offset_length) noexcept:
         """ _update_node(int index, int new_index, float offset_length)
         This method is called when a node is updated.
         """
@@ -468,7 +439,7 @@ cdef class MCP:
         # basic variables to use for end-finding; also fix up the start and end
         # lists
         cdef BOOL_T use_ends = 0
-        cdef INDEX_T num_ends
+        cdef INDEX_T num_ends = 0
         cdef BOOL_T all_ends = find_all_ends
         cdef INDEX_T[:] flat_ends
         starts = _normalize_indices(starts, self.costs_shape)
@@ -543,7 +514,7 @@ cdef class MCP:
             goal_reached = self.goal_reached(index, cumcost)
             if goal_reached > 0:
                 if goal_reached == 1:
-                    continue  # Skip neighbours
+                    continue  # Skip neighbors
                 else:
                     break  # Done completely
 
@@ -786,7 +757,7 @@ cdef class MCP_Connect(MCP):
         cdef INDEX_T start
 
         MCP._reset(self)
-        starts, ends = self._starts, self._ends
+        starts, _ = self._starts, self._ends
 
         # Reset idmap
         self.flat_idmap[...] = -1
@@ -804,7 +775,7 @@ cdef class MCP_Connect(MCP):
 
 
     cdef void _examine_neighbor(self, INDEX_T index, INDEX_T new_index,
-                                FLOAT_T offset_length):
+                                FLOAT_T offset_length) noexcept:
         """ Check whether two fronts are meeting. If so, the flat_traceback
         is obtained and a connection is created.
         """
@@ -849,9 +820,9 @@ cdef class MCP_Connect(MCP):
         id2 : int
             The seed point id where the second neighbor originated from.
         pos1 : tuple
-            The index of of the first neighbour in the connection.
+            The index of of the first neighbor in the connection.
         pos2 : tuple
-            The index of of the second neighbour in the connection.
+            The index of of the second neighbor in the connection.
         cost1 : float
             The cumulative cost at `pos1`.
         cost2 : float
@@ -861,7 +832,7 @@ cdef class MCP_Connect(MCP):
 
 
     cdef void _update_node(self, INDEX_T index, INDEX_T new_index,
-                           FLOAT_T offset_length):
+                           FLOAT_T offset_length) noexcept:
         """ Keep track of the id map so that we know which seed point
         a certain front originates from.
         """
@@ -902,7 +873,7 @@ cdef class MCP_Flexible(MCP):
         as soon as both nodes are frozen.
 
         This method can be overloaded to obtain information about
-        neightboring nodes, and/or to modify the behavior of the MCP
+        neighboring nodes, and/or to modify the behavior of the MCP
         algorithm. One example is the MCP_Connect class, which checks
         for meeting fronts using this hook.
         """
@@ -929,10 +900,10 @@ cdef class MCP_Flexible(MCP):
 
 
     cdef void _examine_neighbor(self, INDEX_T index, INDEX_T new_index,
-                                FLOAT_T offset_length):
+                                FLOAT_T offset_length) noexcept:
         self.examine_neighbor(index, new_index, offset_length)
 
 
     cdef void _update_node(self, INDEX_T index, INDEX_T new_index,
-                           FLOAT_T offset_length):
+                           FLOAT_T offset_length) noexcept:
         self.update_node(index, new_index, offset_length)

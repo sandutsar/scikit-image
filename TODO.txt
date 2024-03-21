@@ -1,62 +1,42 @@
-Remember to list any API changes below in `doc/source/api_changes.txt`.
-
-Version 0.17
+Version 0.25
 ------------
+* In `skimage/feature/util.py`, remove deprecated function `plot_matches` as
+  well as `test_plot_matches` in `skimage/feature/tests/test_util.py`.
+* Remove deprecated `skimage.morphology._skeletonize.skeletonize_3d` and
+  tests related to that deprecation.
+* Remove traces of deprecated `output` parameter in `skimage.filters.gaussian`
+  and remove `test_gaussian.py::test_deprecated_gaussian_output`.
+  Make arguments after the deprecated `output` parameter, keyword only:
+  `gaussian(image, sigma, *, ...)`.
 
-* Update RELEASE.txt regarding Azure Pipelines after making changes to
-  scikit-image-wheels repo.
-* Finalize ``skimage.future.graph`` API.
-* Finalize ``skimage.future.manual_segmentation`` API.
-
-Version 0.20
+Version 0.26
 ------------
-
-* In ``skimage/feature/peak.py``, remove the `indices` argument and
-  the decorator `remove_arg`.
-* In ``skimage.measure._find_contours.py``, remove the `deprecate_kwarg`
-  decorator from `find_contours`.
-* In ``skimage/feature/corner.py``, change `order` default to 'rc' in
-  `structure_tensor`.
-* In ``skimage/feature/corner.py``, remove the `structure_tensor_eigvals`
-  function.
-* Remove deprecated qt plugins, i.e. `qt_plugin.py`, `qt_plugin.ini` and
-  `skivi.py` in `skimage/io/_plugins`.
-* Remove enrirely the folder skimage/scripts containing skivi app.
-  Remove `scripts` related lines in MANIFEST.in, .codecov.yml, appveyor.yml,
-  setup.py
-* Remove viewer app in `skimage/viewer` and remove `./viewer_examples/`.
-  Remove `viewer_examples` occurences in `tools/check_sdist.py`
-
-Version 1.0
------------
-
-* consider removing the argument `coordinates` in
-  `skimage.segmentation.active_contour`, which has not effect.
-* In ``skimage/morphology/misc.py`` remove the deprecated parameter
-  ``in_place`` in remove_small_holes(), remove_small_objects() and
-  clear_border(), and update the tests.
-* Remove the deprecation warning for `input` kwarg of the `label`
-  function in `skimage/measure/_label.py`
-* Change the warning about poorly conditioned data to a ValueError within
-  `skimage.measure.CircleModel.estimate` and update the tests in `test_circle_model_insufficient_data` accordingly.
-
-Other (2022)
-------------
-* Remove pillow version related warning for CVE when pillow > 8.1.2 in
-  `skimage/io/_plugins/pil_plugin.py` and `skimage/io/collection.py`.
-
-Other (2023)
-------------
-* When ``scipy`` is set to >= 1.6.0, remove legacy (i.e. non-zoom) code paths in
-  ``skimage.transform.resize``.
-* When ``scipy`` is set to >= 1.6.0, remove SciPy version checks from
-  ``skimage._shared.utils._fix_ndimage_mode``
+* In ``skimage/morphology/gray.py``, remove deprecated parameters ``shift_x``
+  and ``shift_y`` from ``erosion`` and ``dilation``, along with associated
+  function ``_shift_footprint``.
 
 Other
 -----
-* Check whether imread wheels are available, then re-enable testing imread
-  on macOS. See https://github.com/scikit-image/scikit-image/pull/3898
-* When sphinx-gallery>=0.9.0, remove the thumbnail_size in
-  doc/source/conf.py as the default value will be comparable (#4801).
-* When ``scipy`` is set to >= 1.8.0, remove conditional import of QhullError in
-  ``skimage/morphology/convex_hull.py``.
+* Remove custom code for ignored warning in `skimage/_shared/testing.py` relating
+  to (sparse) matricies (instead of arrays).
+* Remove warningsfilter for imageio and Pillow once
+  https://github.com/python-pillow/Pillow/pull/7125 is shipped in the minimal required
+  version of pillow (probably the release after Pillow 9.5.0).
+* NumPy 1.25.0 is minimal required version:
+    * Remove optional test for a NaN-related deprecation warning from numpy.clip in
+      skimage/exposure/tests/test_exposure.py::test_rescale_nan_warning
+* Finalize ``skimage.future.manual_segmentation`` API,
+  see https://github.com/scikit-image/scikit-image/issues/2624
+
+Post numpy 2
+------------
+- Remove try except blocks following comment starting
+  `# TODO: when minimum numpy`
+  in `skimage/color/colorconv.py`, `skimage/color/tests/test_colorconv.py`,
+  `skimage/measure/_blur_effect.py`, and `skimage/util/tests/test_montage.py`
+- Remove `handle_np2` from `skimage/conftest.py`
+- Once matplotlib doesn't constrain to numpy<2.0 via contourpy (or 2.0 is
+  minimal required version): consider re-adding matplotlib to the test
+  dependencies. Also remove temporary assert for NumPy 2.0 in
+  `nightly_wheel_build.yml`.
+- Remove references to `numpy.bool8` once NumPy 2.0 is minimal required version.

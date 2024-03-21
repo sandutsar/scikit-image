@@ -4,12 +4,19 @@ import numpy as np
 
 from . import _marching_cubes_lewiner_luts as mcluts
 from . import _marching_cubes_lewiner_cy
-from ._marching_cubes_classic import _marching_cubes_classic
 
 
-def marching_cubes(volume, level=None, *, spacing=(1., 1., 1.),
-                   gradient_direction='descent', step_size=1,
-                   allow_degenerate=True, method='lewiner', mask=None):
+def marching_cubes(
+    volume,
+    level=None,
+    *,
+    spacing=(1.0, 1.0, 1.0),
+    gradient_direction='descent',
+    step_size=1,
+    allow_degenerate=True,
+    method='lewiner',
+    mask=None,
+):
     """Marching cubes algorithm to find surfaces in 3d volumetric data.
 
     In contrast with Lorensen et al. approach [2]_, Lewiner et
@@ -19,7 +26,7 @@ def marching_cubes(volume, level=None, *, spacing=(1., 1., 1.),
 
     Parameters
     ----------
-    volume : (M, N, P) array
+    volume : (M, N, P) ndarray
         Input data volume to find isosurfaces. Will internally be
         converted to float32 if necessary.
     level : float, optional
@@ -43,11 +50,8 @@ def marching_cubes(volume, level=None, *, spacing=(1., 1., 1.),
         Whether to allow degenerate (i.e. zero-area) triangles in the
         end-result. Default True. If False, degenerate triangles are
         removed, at the cost of making the algorithm slower.
-    method: str, optional
-        One of 'lewiner', 'lorensen' or '_lorensen'. Specify which of
-        Lewiner et al. or Lorensen et al. method will be used. The
-        '_lorensen' flag correspond to an old implementation that will
-        be deprecated in version 0.19.
+    method: {'lewiner', 'lorensen'}, optional
+        Whether the method of Lewiner et al. or Lorensen et al. will be used.
     mask : (M, N, P) array, optional
         Boolean array. The marching cube algorithm will be computed only on
         True elements. This will save computational time when interfaces
@@ -69,7 +73,7 @@ def marching_cubes(volume, level=None, *, spacing=(1., 1., 1.),
     normals : (V, 3) array
         The normal direction at each vertex, as calculated from the
         data.
-    values : (V, ) array
+    values : (V,) array
         Gives a measure for the maximum value of the data in the local region
         near each vertex. This can be used by visualization tools to apply
         a colormap to the mesh.
@@ -126,34 +130,34 @@ def marching_cubes(volume, level=None, *, spacing=(1., 1., 1.),
            Resolution 3D Surface Construction Algorithm. Computer Graphics
            (SIGGRAPH 87 Proceedings) 21(4) July 1987, p. 163-170).
            :DOI:`10.1145/37401.37422`
-
     """
-
-    if method == 'lewiner':
-        return _marching_cubes_lewiner(volume, level, spacing,
-                                       gradient_direction, step_size,
-                                       allow_degenerate, use_classic=False,
-                                       mask=mask)
-    elif method == 'lorensen':
-        return _marching_cubes_lewiner(volume, level, spacing,
-                                       gradient_direction, step_size,
-                                       allow_degenerate, use_classic=True,
-                                       mask=mask)
-    elif method == '_lorensen':
-        if mask is not None:
-            raise NotImplementedError(
-                'Parameter `mask` is not implemented for method "_lorensen" '
-                'and will be ignored.'
-            )
-        return _marching_cubes_classic(volume, level, spacing,
-                                       gradient_direction)
-    else:
-        raise ValueError("method should be one of 'lewiner', 'lorensen' or "
-                         "'_lorensen'.")
+    use_classic = False
+    if method == 'lorensen':
+        use_classic = True
+    elif method != 'lewiner':
+        raise ValueError("method should be either 'lewiner' or 'lorensen'")
+    return _marching_cubes_lewiner(
+        volume,
+        level,
+        spacing,
+        gradient_direction,
+        step_size,
+        allow_degenerate,
+        use_classic=use_classic,
+        mask=mask,
+    )
 
 
-def _marching_cubes_lewiner(volume, level, spacing, gradient_direction,
-                            step_size, allow_degenerate, use_classic, mask):
+def _marching_cubes_lewiner(
+    volume,
+    level,
+    spacing,
+    gradient_direction,
+    step_size,
+    allow_degenerate,
+    use_classic,
+    mask,
+):
     """Lewiner et al. algorithm for marching cubes. See
     marching_cubes_lewiner for documentation.
 
@@ -164,8 +168,7 @@ def _marching_cubes_lewiner(volume, level, spacing, gradient_direction,
         raise ValueError('Input volume should be a 3D numpy array.')
     if volume.shape[0] < 2 or volume.shape[1] < 2 or volume.shape[2] < 2:
         raise ValueError("Input array must be at least 2x2x2.")
-    volume = np.ascontiguousarray(volume,
-                                  np.float32)  # no copy if not necessary
+    volume = np.ascontiguousarray(volume, np.float32)  # no copy if not necessary
 
     # Check/convert other inputs:
     # level
@@ -195,8 +198,9 @@ def _marching_cubes_lewiner(volume, level, spacing, gradient_direction,
 
     # Apply algorithm
     func = _marching_cubes_lewiner_cy.marching_cubes
-    vertices, faces, normals, values = func(volume, level, L,
-                                            step_size, use_classic, mask)
+    vertices, faces, normals, values = func(
+        volume, level, L, step_size, use_classic, mask
+    )
 
     if not len(vertices):
         raise RuntimeError('No surface found at the given iso value.')
@@ -212,8 +216,10 @@ def _marching_cubes_lewiner(volume, level, spacing, gradient_direction,
         # left-handed
         faces = np.fliplr(faces)
     elif not gradient_direction == 'ascent':
-        raise ValueError("Incorrect input %s in `gradient_direction`, see "
-                         "docstring." % (gradient_direction))
+        raise ValueError(
+            f"Incorrect input {gradient_direction} in `gradient_direction`, "
+            "see docstring."
+        )
     if not np.array_equal(spacing, (1, 1, 1)):
         vertices = vertices * np.r_[spacing]
 
@@ -232,43 +238,115 @@ def _to_array(args):
     return ar
 
 
-# Map an edge-index to two relative pixel positions. The ege index
+# Map an edge-index to two relative pixel positions. The edge index
 # represents a point that lies somewhere in between these pixels.
 # Linear interpolation should be used to determine where it is exactly.
 #   0
 # 3   1   ->  0x
 #   2         xx
+
+# fmt: off
 EDGETORELATIVEPOSX = np.array([ [0,1],[1,1],[1,0],[0,0], [0,1],[1,1],[1,0],[0,0], [0,0],[1,1],[1,1],[0,0] ], 'int8')
 EDGETORELATIVEPOSY = np.array([ [0,0],[0,1],[1,1],[1,0], [0,0],[0,1],[1,1],[1,0], [0,0],[0,0],[1,1],[1,1] ], 'int8')
 EDGETORELATIVEPOSZ = np.array([ [0,0],[0,0],[0,0],[0,0], [1,1],[1,1],[1,1],[1,1], [0,1],[0,1],[0,1],[0,1] ], 'int8')
+# fmt: on
 
 
 def _get_mc_luts():
-    """ Kind of lazy obtaining of the luts.
-    """
+    """Kind of lazy obtaining of the luts."""
     if not hasattr(mcluts, 'THE_LUTS'):
-
         mcluts.THE_LUTS = _marching_cubes_lewiner_cy.LutProvider(
-                EDGETORELATIVEPOSX, EDGETORELATIVEPOSY, EDGETORELATIVEPOSZ,
-
-                _to_array(mcluts.CASESCLASSIC), _to_array(mcluts.CASES),
-
-                _to_array(mcluts.TILING1), _to_array(mcluts.TILING2), _to_array(mcluts.TILING3_1), _to_array(mcluts.TILING3_2),
-                _to_array(mcluts.TILING4_1), _to_array(mcluts.TILING4_2), _to_array(mcluts.TILING5), _to_array(mcluts.TILING6_1_1),
-                _to_array(mcluts.TILING6_1_2), _to_array(mcluts.TILING6_2), _to_array(mcluts.TILING7_1),
-                _to_array(mcluts.TILING7_2), _to_array(mcluts.TILING7_3), _to_array(mcluts.TILING7_4_1),
-                _to_array(mcluts.TILING7_4_2), _to_array(mcluts.TILING8), _to_array(mcluts.TILING9),
-                _to_array(mcluts.TILING10_1_1), _to_array(mcluts.TILING10_1_1_), _to_array(mcluts.TILING10_1_2),
-                _to_array(mcluts.TILING10_2), _to_array(mcluts.TILING10_2_), _to_array(mcluts.TILING11),
-                _to_array(mcluts.TILING12_1_1), _to_array(mcluts.TILING12_1_1_), _to_array(mcluts.TILING12_1_2),
-                _to_array(mcluts.TILING12_2), _to_array(mcluts.TILING12_2_), _to_array(mcluts.TILING13_1),
-                _to_array(mcluts.TILING13_1_), _to_array(mcluts.TILING13_2), _to_array(mcluts.TILING13_2_),
-                _to_array(mcluts.TILING13_3), _to_array(mcluts.TILING13_3_), _to_array(mcluts.TILING13_4),
-                _to_array(mcluts.TILING13_5_1), _to_array(mcluts.TILING13_5_2), _to_array(mcluts.TILING14),
-
-                _to_array(mcluts.TEST3), _to_array(mcluts.TEST4), _to_array(mcluts.TEST6),
-                _to_array(mcluts.TEST7), _to_array(mcluts.TEST10), _to_array(mcluts.TEST12),
-                _to_array(mcluts.TEST13), _to_array(mcluts.SUBCONFIG13),
-                )
+            EDGETORELATIVEPOSX,
+            EDGETORELATIVEPOSY,
+            EDGETORELATIVEPOSZ,
+            _to_array(mcluts.CASESCLASSIC),
+            _to_array(mcluts.CASES),
+            _to_array(mcluts.TILING1),
+            _to_array(mcluts.TILING2),
+            _to_array(mcluts.TILING3_1),
+            _to_array(mcluts.TILING3_2),
+            _to_array(mcluts.TILING4_1),
+            _to_array(mcluts.TILING4_2),
+            _to_array(mcluts.TILING5),
+            _to_array(mcluts.TILING6_1_1),
+            _to_array(mcluts.TILING6_1_2),
+            _to_array(mcluts.TILING6_2),
+            _to_array(mcluts.TILING7_1),
+            _to_array(mcluts.TILING7_2),
+            _to_array(mcluts.TILING7_3),
+            _to_array(mcluts.TILING7_4_1),
+            _to_array(mcluts.TILING7_4_2),
+            _to_array(mcluts.TILING8),
+            _to_array(mcluts.TILING9),
+            _to_array(mcluts.TILING10_1_1),
+            _to_array(mcluts.TILING10_1_1_),
+            _to_array(mcluts.TILING10_1_2),
+            _to_array(mcluts.TILING10_2),
+            _to_array(mcluts.TILING10_2_),
+            _to_array(mcluts.TILING11),
+            _to_array(mcluts.TILING12_1_1),
+            _to_array(mcluts.TILING12_1_1_),
+            _to_array(mcluts.TILING12_1_2),
+            _to_array(mcluts.TILING12_2),
+            _to_array(mcluts.TILING12_2_),
+            _to_array(mcluts.TILING13_1),
+            _to_array(mcluts.TILING13_1_),
+            _to_array(mcluts.TILING13_2),
+            _to_array(mcluts.TILING13_2_),
+            _to_array(mcluts.TILING13_3),
+            _to_array(mcluts.TILING13_3_),
+            _to_array(mcluts.TILING13_4),
+            _to_array(mcluts.TILING13_5_1),
+            _to_array(mcluts.TILING13_5_2),
+            _to_array(mcluts.TILING14),
+            _to_array(mcluts.TEST3),
+            _to_array(mcluts.TEST4),
+            _to_array(mcluts.TEST6),
+            _to_array(mcluts.TEST7),
+            _to_array(mcluts.TEST10),
+            _to_array(mcluts.TEST12),
+            _to_array(mcluts.TEST13),
+            _to_array(mcluts.SUBCONFIG13),
+        )
 
     return mcluts.THE_LUTS
+
+
+def mesh_surface_area(verts, faces):
+    """Compute surface area, given vertices and triangular faces.
+
+    Parameters
+    ----------
+    verts : (V, 3) array of floats
+        Array containing coordinates for V unique mesh vertices.
+    faces : (F, 3) array of ints
+        List of length-3 lists of integers, referencing vertex coordinates as
+        provided in `verts`.
+
+    Returns
+    -------
+    area : float
+        Surface area of mesh. Units now [coordinate units] ** 2.
+
+    Notes
+    -----
+    The arguments expected by this function are the first two outputs from
+    `skimage.measure.marching_cubes`. For unit correct output, ensure correct
+    `spacing` was passed to `skimage.measure.marching_cubes`.
+
+    This algorithm works properly only if the ``faces`` provided are all
+    triangles.
+
+    See Also
+    --------
+    skimage.measure.marching_cubes
+
+    """
+    # Fancy indexing to define two vector arrays from triangle vertices
+    actual_verts = verts[faces]
+    a = actual_verts[:, 0, :] - actual_verts[:, 1, :]
+    b = actual_verts[:, 0, :] - actual_verts[:, 2, :]
+    del actual_verts
+
+    # Area of triangle in 3D = 1/2 * Euclidean norm of cross product
+    return ((np.cross(a, b) ** 2).sum(axis=1) ** 0.5).sum() / 2.0

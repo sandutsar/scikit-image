@@ -1,12 +1,13 @@
+import functools
+import math
 from itertools import combinations_with_replacement
-from warnings import warn
 
 import numpy as np
 from scipy import ndimage as ndi
 from scipy import spatial, stats
 
 from .._shared.filters import gaussian
-from .._shared.utils import _supported_float_type, safe_as_int
+from .._shared.utils import _supported_float_type, safe_as_int, warn
 from ..transform import integral_image
 from ..util import img_as_float
 from ._hessian_det_appx import _hessian_matrix_det
@@ -35,13 +36,14 @@ def _compute_derivatives(image, mode='constant', cval=0):
 
     """
 
-    derivatives = [ndi.sobel(image, axis=i, mode=mode, cval=cval)
-                   for i in range(image.ndim)]
+    derivatives = [
+        ndi.sobel(image, axis=i, mode=mode, cval=cval) for i in range(image.ndim)
+    ]
 
     return derivatives
 
 
-def structure_tensor(image, sigma=1, mode='constant', cval=0, order=None):
+def structure_tensor(image, sigma=1, mode='constant', cval=0, order='rc'):
     """Compute structure tensor using sum of squared differences.
 
     The (2-dimensional) structure tensor A is defined as::
@@ -69,11 +71,11 @@ def structure_tensor(image, sigma=1, mode='constant', cval=0, order=None):
         Used in conjunction with mode 'constant', the value outside
         the image boundaries.
     order : {'rc', 'xy'}, optional
-        NOTE: Only applies in 2D. Higher dimensions must always use 'rc' order.
-        This parameter allows for the use of reverse or forward order of
-        the image axes in gradient computation. 'rc' indicates the use of
-        the first axis initially (Arr, Arc, Acc), whilst 'xy' indicates the
-        usage of the last axis initially (Axx, Axy, Ayy).
+        NOTE: 'xy' is only an option for 2D images, higher dimensions must
+        always use 'rc' order. This parameter allows for the use of reverse or
+        forward order of the image axes in gradient computation. 'rc' indicates
+        the use of the first axis initially (Arr, Arc, Acc), whilst 'xy'
+        indicates the usage of the last axis initially (Axx, Axy, Ayy).
 
     Returns
     -------
@@ -105,24 +107,13 @@ def structure_tensor(image, sigma=1, mode='constant', cval=0, order=None):
     if order == 'xy' and image.ndim > 2:
         raise ValueError('Only "rc" order is supported for dim > 2.')
 
-    if order is None:
-        if image.ndim == 2:
-            # The legacy 2D code followed (x, y) convention, so we swap the
-            # axis order to maintain compatibility with old code
-            warn('deprecation warning: the default order of the structure '
-                 'tensor values will be "row-column" instead of "xy" starting '
-                 'in skimage version 0.20. Use order="rc" or order="xy" to '
-                 'set this explicitly.  (Specify order="xy" to maintain the '
-                 'old behavior.)', category=FutureWarning, stacklevel=2)
-            order = 'xy'
-        else:
-            order = 'rc'
+    if order not in ['rc', 'xy']:
+        raise ValueError(f'order {order} is invalid. Must be either "rc" or "xy"')
 
     if not np.isscalar(sigma):
         sigma = tuple(sigma)
         if len(sigma) != image.ndim:
-            raise ValueError('sigma must have as many elements as image '
-                             'has axes')
+            raise ValueError('sigma must have as many elements as image ' 'has axes')
 
     image = _prepare_grayscale_input_nD(image)
 
@@ -132,14 +123,109 @@ def structure_tensor(image, sigma=1, mode='constant', cval=0, order=None):
         derivatives = reversed(derivatives)
 
     # structure tensor
-    A_elems = [gaussian(der0 * der1, sigma, mode=mode, cval=cval)
-               for der0, der1 in combinations_with_replacement(derivatives, 2)]
+    A_elems = [
+        gaussian(der0 * der1, sigma=sigma, mode=mode, cval=cval)
+        for der0, der1 in combinations_with_replacement(derivatives, 2)
+    ]
 
     return A_elems
 
 
-def hessian_matrix(image, sigma=1, mode='constant', cval=0, order='rc'):
-    """Compute the Hessian matrix.
+def _hessian_matrix_with_gaussian(image, sigma=1, mode='reflect', cval=0, order='rc'):
+    """Compute the Hessian via convolutions with Gaussian derivatives.
+
+    In 2D, the Hessian matrix is defined as:
+        H = [Hrr Hrc]
+            [Hrc Hcc]
+
+    which is computed by convolving the image with the second derivatives
+    of the Gaussian kernel in the respective r- and c-directions.
+
+    The implementation here also supports n-dimensional data.
+
+    Parameters
+    ----------
+    image : ndarray
+        Input image.
+    sigma : float or sequence of float, optional
+        Standard deviation used for the Gaussian kernel, which sets the
+        amount of smoothing in terms of pixel-distances. It is
+        advised to not choose a sigma much less than 1.0, otherwise
+        aliasing artifacts may occur.
+    mode : {'constant', 'reflect', 'wrap', 'nearest', 'mirror'}, optional
+        How to handle values outside the image borders.
+    cval : float, optional
+        Used in conjunction with mode 'constant', the value outside
+        the image boundaries.
+    order : {'rc', 'xy'}, optional
+        This parameter allows for the use of reverse or forward order of
+        the image axes in gradient computation. 'rc' indicates the use of
+        the first axis initially (Hrr, Hrc, Hcc), whilst 'xy' indicates the
+        usage of the last axis initially (Hxx, Hxy, Hyy)
+
+    Returns
+    -------
+    H_elems : list of ndarray
+        Upper-diagonal elements of the hessian matrix for each pixel in the
+        input image. In 2D, this will be a three element list containing [Hrr,
+        Hrc, Hcc]. In nD, the list will contain ``(n**2 + n) / 2`` arrays.
+
+    """
+    image = img_as_float(image)
+    float_dtype = _supported_float_type(image.dtype)
+    image = image.astype(float_dtype, copy=False)
+    if image.ndim > 2 and order == "xy":
+        raise ValueError("order='xy' is only supported for 2D images.")
+    if order not in ["rc", "xy"]:
+        raise ValueError(f"unrecognized order: {order}")
+
+    if np.isscalar(sigma):
+        sigma = (sigma,) * image.ndim
+
+    # This function uses `scipy.ndimage.gaussian_filter` with the order
+    # argument to compute convolutions. For example, specifying
+    # ``order=[1, 0]`` would apply convolution with a first-order derivative of
+    # the Gaussian along the first axis and simple Gaussian smoothing along the
+    # second.
+
+    # For small sigma, the SciPy Gaussian filter suffers from aliasing and edge
+    # artifacts, given that the filter will approximate a sinc or sinc
+    # derivative which only goes to 0 very slowly (order 1/n**2). Thus, we use
+    # a much larger truncate value to reduce any edge artifacts.
+    truncate = 8 if all(s > 1 for s in sigma) else 100
+    sq1_2 = 1 / math.sqrt(2)
+    sigma_scaled = tuple(sq1_2 * s for s in sigma)
+    common_kwargs = dict(sigma=sigma_scaled, mode=mode, cval=cval, truncate=truncate)
+    gaussian_ = functools.partial(ndi.gaussian_filter, **common_kwargs)
+
+    # Apply two successive first order Gaussian derivative operations, as
+    # detailed in:
+    # https://dsp.stackexchange.com/questions/78280/are-scipy-second-order-gaussian-derivatives-correct  # noqa
+
+    # 1.) First order along one axis while smoothing (order=0) along the other
+    ndim = image.ndim
+
+    # orders in 2D = ([1, 0], [0, 1])
+    #        in 3D = ([1, 0, 0], [0, 1, 0], [0, 0, 1])
+    #        etc.
+    orders = tuple([0] * d + [1] + [0] * (ndim - d - 1) for d in range(ndim))
+    gradients = [gaussian_(image, order=orders[d]) for d in range(ndim)]
+
+    # 2.) apply the derivative along another axis as well
+    axes = range(ndim)
+    if order == 'xy':
+        axes = reversed(axes)
+    H_elems = [
+        gaussian_(gradients[ax0], order=orders[ax1])
+        for ax0, ax1 in combinations_with_replacement(axes, 2)
+    ]
+    return H_elems
+
+
+def hessian_matrix(
+    image, sigma=1, mode='constant', cval=0, order='rc', use_gaussian_derivatives=None
+):
+    r"""Compute the Hessian matrix.
 
     In 2D, the Hessian matrix is defined as::
 
@@ -164,10 +250,14 @@ def hessian_matrix(image, sigma=1, mode='constant', cval=0, order='rc'):
         Used in conjunction with mode 'constant', the value outside
         the image boundaries.
     order : {'rc', 'xy'}, optional
-        This parameter allows for the use of reverse or forward order of
-        the image axes in gradient computation. 'rc' indicates the use of
-        the first axis initially (Hrr, Hrc, Hcc), whilst 'xy' indicates the
-        usage of the last axis initially (Hxx, Hxy, Hyy)
+        For 2D images, this parameter allows for the use of reverse or forward
+        order of the image axes in gradient computation. 'rc' indicates the use
+        of the first axis initially (Hrr, Hrc, Hcc), whilst 'xy' indicates the
+        usage of the last axis initially (Hxx, Hxy, Hyy). Images with higher
+        dimension must always use 'rc' order.
+    use_gaussian_derivatives : boolean, optional
+        Indicates whether the Hessian is computed by convolving with Gaussian
+        derivatives, or by a simple finite-difference operation.
 
     Returns
     -------
@@ -176,34 +266,75 @@ def hessian_matrix(image, sigma=1, mode='constant', cval=0, order='rc'):
         input image. In 2D, this will be a three element list containing [Hrr,
         Hrc, Hcc]. In nD, the list will contain ``(n**2 + n) / 2`` arrays.
 
+
+    Notes
+    -----
+    The distributive property of derivatives and convolutions allows us to
+    restate the derivative of an image, I, smoothed with a Gaussian kernel, G,
+    as the convolution of the image with the derivative of G.
+
+    .. math::
+
+        \frac{\partial }{\partial x_i}(I * G) =
+        I * \left( \frac{\partial }{\partial x_i} G \right)
+
+    When ``use_gaussian_derivatives`` is ``True``, this property is used to
+    compute the second order derivatives that make up the Hessian matrix.
+
+    When ``use_gaussian_derivatives`` is ``False``, simple finite differences
+    on a Gaussian-smoothed image are used instead.
+
     Examples
     --------
     >>> from skimage.feature import hessian_matrix
     >>> square = np.zeros((5, 5))
     >>> square[2, 2] = 4
-    >>> Hrr, Hrc, Hcc = hessian_matrix(square, sigma=0.1, order='rc')
+    >>> Hrr, Hrc, Hcc = hessian_matrix(square, sigma=0.1, order='rc',
+    ...                                use_gaussian_derivatives=False)
     >>> Hrc
     array([[ 0.,  0.,  0.,  0.,  0.],
            [ 0.,  1.,  0., -1.,  0.],
            [ 0.,  0.,  0.,  0.,  0.],
            [ 0., -1.,  0.,  1.,  0.],
            [ 0.,  0.,  0.,  0.,  0.]])
+
     """
 
     image = img_as_float(image)
     float_dtype = _supported_float_type(image.dtype)
     image = image.astype(float_dtype, copy=False)
+    if image.ndim > 2 and order == "xy":
+        raise ValueError("order='xy' is only supported for 2D images.")
+    if order not in ["rc", "xy"]:
+        raise ValueError(f"unrecognized order: {order}")
+
+    if use_gaussian_derivatives is None:
+        use_gaussian_derivatives = False
+        warn(
+            "use_gaussian_derivatives currently defaults to False, but will "
+            "change to True in a future version. Please specify this "
+            "argument explicitly to maintain the current behavior",
+            category=FutureWarning,
+            stacklevel=2,
+        )
+
+    if use_gaussian_derivatives:
+        return _hessian_matrix_with_gaussian(
+            image, sigma=sigma, mode=mode, cval=cval, order=order
+        )
 
     gaussian_filtered = gaussian(image, sigma=sigma, mode=mode, cval=cval)
 
     gradients = np.gradient(gaussian_filtered)
     axes = range(image.ndim)
 
-    if order == 'rc':
+    if order == 'xy':
         axes = reversed(axes)
 
-    H_elems = [np.gradient(gradients[ax0], axis=ax1)
-               for ax0, ax1 in combinations_with_replacement(axes, 2)]
+    H_elems = [
+        np.gradient(gradients[ax0], axis=ax1)
+        for ax0, ax1 in combinations_with_replacement(axes, 2)
+    ]
     return H_elems
 
 
@@ -250,18 +381,15 @@ def hessian_matrix_det(image, sigma=1, approximate=True):
         integral = integral_image(image)
         return np.array(_hessian_matrix_det(integral, sigma))
     else:  # slower brute-force implementation for nD images
-        hessian_mat_array = _symmetric_image(hessian_matrix(image, sigma))
+        hessian_mat_array = _symmetric_image(
+            hessian_matrix(image, sigma, use_gaussian_derivatives=False)
+        )
         return np.linalg.det(hessian_mat_array)
 
 
-def _image_orthogonal_matrix22_eigvals(M00, M01, M11):
-    l1 = (M00 + M11) / 2 + np.sqrt(4 * M01 ** 2 + (M00 - M11) ** 2) / 2
-    l2 = (M00 + M11) / 2 - np.sqrt(4 * M01 ** 2 + (M00 - M11) ** 2) / 2
-    return l1, l2
-
-
 def _symmetric_compute_eigenvalues(S_elems):
-    """Compute eigenvalues from the upperdiagonal entries of a symmetric matrix
+    """Compute eigenvalues from the upper-diagonal entries of a symmetric
+    matrix.
 
     Parameters
     ----------
@@ -277,15 +405,20 @@ def _symmetric_compute_eigenvalues(S_elems):
         ith-largest eigenvalue at position (j, k).
     """
 
-    if len(S_elems) == 3:  # Use fast Cython code for 2D
-        eigs = np.stack(_image_orthogonal_matrix22_eigvals(*S_elems))
+    if len(S_elems) == 3:  # Fast explicit formulas for 2D.
+        M00, M01, M11 = S_elems
+        eigs = np.empty((2, *M00.shape), M00.dtype)
+        eigs[:] = (M00 + M11) / 2
+        hsqrtdet = np.sqrt(M01**2 + ((M00 - M11) / 2) ** 2)
+        eigs[0] += hsqrtdet
+        eigs[1] -= hsqrtdet
+        return eigs
     else:
         matrices = _symmetric_image(S_elems)
         # eigvalsh returns eigenvalues in increasing order. We want decreasing
         eigs = np.linalg.eigvalsh(matrices)[..., ::-1]
         leading_axes = tuple(range(eigs.ndim - 1))
-        eigs = np.transpose(eigs, (eigs.ndim - 1,) + leading_axes)
-    return eigs
+        return np.transpose(eigs, (eigs.ndim - 1,) + leading_axes)
 
 
 def _symmetric_image(S_elems):
@@ -305,10 +438,12 @@ def _symmetric_image(S_elems):
         containing the matrix corresponding to each coordinate.
     """
     image = S_elems[0]
-    symmetric_image = np.zeros(image.shape + (image.ndim, image.ndim),
-                               dtype=S_elems[0].dtype)
-    for idx, (row, col) in \
-            enumerate(combinations_with_replacement(range(image.ndim), 2)):
+    symmetric_image = np.zeros(
+        image.shape + (image.ndim, image.ndim), dtype=S_elems[0].dtype
+    )
+    for idx, (row, col) in enumerate(
+        combinations_with_replacement(range(image.ndim), 2)
+    ):
         symmetric_image[..., row, col] = S_elems[idx]
         symmetric_image[..., col, row] = S_elems[idx]
     return symmetric_image
@@ -351,47 +486,6 @@ def structure_tensor_eigenvalues(A_elems):
     return _symmetric_compute_eigenvalues(A_elems)
 
 
-def structure_tensor_eigvals(Axx, Axy, Ayy):
-    """Compute eigenvalues of structure tensor.
-
-    Parameters
-    ----------
-    Axx : ndarray
-        Element of the structure tensor for each pixel in the input image.
-    Axy : ndarray
-        Element of the structure tensor for each pixel in the input image.
-    Ayy : ndarray
-        Element of the structure tensor for each pixel in the input image.
-
-    Returns
-    -------
-    l1 : ndarray
-        Larger eigen value for each input matrix.
-    l2 : ndarray
-        Smaller eigen value for each input matrix.
-
-    Examples
-    --------
-    >>> from skimage.feature import structure_tensor, structure_tensor_eigvals
-    >>> square = np.zeros((5, 5))
-    >>> square[2, 2] = 1
-    >>> Arr, Arc, Acc = structure_tensor(square, sigma=0.1, order='rc')
-    >>> structure_tensor_eigvals(Acc, Arc, Arr)[0]  # doctest: +SKIP
-    array([[0., 0., 0., 0., 0.],
-           [0., 2., 4., 2., 0.],
-           [0., 4., 0., 4., 0.],
-           [0., 2., 4., 2., 0.],
-           [0., 0., 0., 0., 0.]])
-
-    """
-    warn('deprecation warning: the function structure_tensor_eigvals is '
-         'deprecated and will be removed in version 0.20. Please use '
-         'structure_tensor_eigenvalues instead.',
-         category=FutureWarning, stacklevel=2)
-
-    return _image_orthogonal_matrix22_eigvals(Axx, Axy, Ayy)
-
-
 def hessian_matrix_eigvals(H_elems):
     """Compute eigenvalues of Hessian matrix.
 
@@ -413,7 +507,8 @@ def hessian_matrix_eigvals(H_elems):
     >>> from skimage.feature import hessian_matrix, hessian_matrix_eigvals
     >>> square = np.zeros((5, 5))
     >>> square[2, 2] = 4
-    >>> H_elems = hessian_matrix(square, sigma=0.1, order='rc')
+    >>> H_elems = hessian_matrix(square, sigma=0.1, order='rc',
+    ...                          use_gaussian_derivatives=False)
     >>> hessian_matrix_eigvals(H_elems)[0]
     array([[ 0.,  0.,  2.,  0.,  0.],
            [ 0.,  1.,  0.,  1.,  0.],
@@ -490,7 +585,14 @@ def shape_index(image, sigma=1, mode='constant', cval=0):
            [ nan,  nan, -0.5,  nan,  nan]])
     """
 
-    H = hessian_matrix(image, sigma=sigma, mode=mode, cval=cval, order='rc')
+    H = hessian_matrix(
+        image,
+        sigma=sigma,
+        mode=mode,
+        cval=cval,
+        order='rc',
+        use_gaussian_derivatives=False,
+    )
     l1, l2 = hessian_matrix_eigvals(H)
 
     # don't warn on divide by 0 as occurs in the docstring example
@@ -538,8 +640,8 @@ def corner_kitchen_rosenfeld(image, mode='constant', cval=0):
     imxy, imxx = _compute_derivatives(imx, mode=mode, cval=cval)
     imyy, imyx = _compute_derivatives(imy, mode=mode, cval=cval)
 
-    numerator = (imxx * imy ** 2 + imyy * imx ** 2 - 2 * imxy * imx * imy)
-    denominator = (imx ** 2 + imy ** 2)
+    numerator = imxx * imy**2 + imyy * imx**2 - 2 * imxy * imx * imy
+    denominator = imx**2 + imy**2
 
     response = np.zeros_like(image, dtype=float_dtype)
 
@@ -617,12 +719,12 @@ def corner_harris(image, method='k', k=0.05, eps=1e-6, sigma=1):
     Arr, Arc, Acc = structure_tensor(image, sigma, order='rc')
 
     # determinant
-    detA = Arr * Acc - Arc ** 2
+    detA = Arr * Acc - Arc**2
     # trace
     traceA = Arr + Acc
 
     if method == 'k':
-        response = detA - k * traceA ** 2
+        response = detA - k * traceA**2
     else:
         response = 2 * detA / (traceA + eps)
 
@@ -686,7 +788,7 @@ def corner_shi_tomasi(image, sigma=1):
     Arr, Arc, Acc = structure_tensor(image, sigma, order='rc')
 
     # minimum eigenvalue of A
-    response = ((Arr + Acc) - np.sqrt((Arr - Acc) ** 2 + 4 * Arc ** 2)) / 2
+    response = ((Arr + Acc) - np.sqrt((Arr - Acc) ** 2 + 4 * Arc**2)) / 2
 
     return response
 
@@ -722,10 +824,10 @@ def corner_foerstner(image, sigma=1):
 
     References
     ----------
-    .. [1] Förstner, W., & Gülch, E. (1987, June). A fast operator for detection and
-           precise location of distinct points, corners and centres of circular
-           features. In Proc. ISPRS intercommission conference on fast processing of
-           photogrammetric data (pp. 281-305).
+    .. [1] Förstner, W., & Gülch, E. (1987, June). A fast operator for
+           detection and precise location of distinct points, corners and
+           centres of circular features. In Proc. ISPRS intercommission
+           conference on fast processing of photogrammetric data (pp. 281-305).
            https://cseweb.ucsd.edu/classes/sp02/cse252/foerstner/foerstner.pdf
     .. [2] https://en.wikipedia.org/wiki/Corner_detection
 
@@ -760,7 +862,7 @@ def corner_foerstner(image, sigma=1):
     Arr, Arc, Acc = structure_tensor(image, sigma, order='rc')
 
     # determinant
-    detA = Arr * Acc - Arc ** 2
+    detA = Arr * Acc - Arc**2
     # trace
     traceA = Arr + Acc
 
@@ -800,9 +902,9 @@ def corner_fast(image, n=12, threshold=0.15):
 
     References
     ----------
-    .. [1] Rosten, E., & Drummond, T. (2006, May). Machine learning for high-speed
-           corner detection. In European conference on computer vision (pp. 430-443).
-           Springer, Berlin, Heidelberg.
+    .. [1] Rosten, E., & Drummond, T. (2006, May). Machine learning for
+           high-speed corner detection. In European conference on computer
+           vision (pp. 430-443). Springer, Berlin, Heidelberg.
            :DOI:`10.1007/11744023_34`
            http://www.edwardrosten.com/work/rosten_2006_machine.pdf
     .. [2] Wikipedia, "Features from accelerated segment test",
@@ -868,10 +970,10 @@ def corner_subpix(image, corners, window_size=11, alpha=0.99):
 
     References
     ----------
-    .. [1] Förstner, W., & Gülch, E. (1987, June). A fast operator for detection and
-           precise location of distinct points, corners and centres of circular
-           features. In Proc. ISPRS intercommission conference on fast processing of
-           photogrammetric data (pp. 281-305).
+    .. [1] Förstner, W., & Gülch, E. (1987, June). A fast operator for
+           detection and precise location of distinct points, corners and
+           centres of circular features. In Proc. ISPRS intercommission
+           conference on fast processing of photogrammetric data (pp. 281-305).
            https://cseweb.ucsd.edu/classes/sp02/cse252/foerstner/foerstner.pdf
     .. [2] https://en.wikipedia.org/wiki/Corner_detection
 
@@ -912,21 +1014,20 @@ def corner_subpix(image, corners, window_size=11, alpha=0.99):
     # normal equation arrays
     N_dot = np.zeros((2, 2), dtype=float_dtype)
     N_edge = np.zeros((2, 2), dtype=float_dtype)
-    b_dot = np.zeros((2, ), dtype=float_dtype)
-    b_edge = np.zeros((2, ), dtype=float_dtype)
+    b_dot = np.zeros((2,), dtype=float_dtype)
+    b_edge = np.zeros((2,), dtype=float_dtype)
 
     # critical statistical test values
-    redundancy = window_size ** 2 - 2
+    redundancy = window_size**2 - 2
     t_crit_dot = stats.f.isf(1 - alpha, redundancy, redundancy)
     t_crit_edge = stats.f.isf(alpha, redundancy, redundancy)
 
     # coordinates of pixels within window
-    y, x = np.mgrid[- wext:wext + 1, - wext:wext + 1]
+    y, x = np.mgrid[-wext : wext + 1, -wext : wext + 1]
 
     corners_subpix = np.zeros_like(corners, dtype=float_dtype)
 
     for i, (y0, x0) in enumerate(corners):
-
         # crop window around corner + border for sobel operator
         miny = y0 - wext - 1
         maxy = y0 + wext + 2
@@ -957,7 +1058,7 @@ def corner_subpix(image, corners, window_size=11, alpha=0.99):
 
         # normal equations for subpixel position
         N_dot[0, 0] = Axx
-        N_dot[0, 1] = N_dot[1, 0] = - Axy
+        N_dot[0, 1] = N_dot[1, 0] = -Axy
         N_dot[1, 1] = Ayy
 
         N_edge[0, 0] = Ayy
@@ -991,10 +1092,12 @@ def corner_subpix(image, corners, window_size=11, alpha=0.99):
 
         # determine corner class (dot or edge)
         # variance for different models
-        var_dot = np.sum(winx_winx * ryy_dot - 2 * winx_winy * rxy_dot
-                         + winy_winy * rxx_dot)
-        var_edge = np.sum(winy_winy * ryy_edge + 2 * winx_winy * rxy_edge
-                          + winx_winx * rxx_edge)
+        var_dot = np.sum(
+            winx_winx * ryy_dot - 2 * winx_winy * rxy_dot + winy_winy * rxx_dot
+        )
+        var_edge = np.sum(
+            winy_winy * ryy_edge + 2 * winx_winy * rxy_edge + winx_winx * rxx_edge
+        )
 
         # test value (F-distributed)
         if var_dot < np.spacing(1) and var_edge < np.spacing(1):
@@ -1020,10 +1123,20 @@ def corner_subpix(image, corners, window_size=11, alpha=0.99):
     return corners_subpix
 
 
-def corner_peaks(image, min_distance=1, threshold_abs=None, threshold_rel=None,
-                 exclude_border=True, indices=True, num_peaks=np.inf,
-                 footprint=None, labels=None, *, num_peaks_per_label=np.inf,
-                 p_norm=np.inf):
+def corner_peaks(
+    image,
+    min_distance=1,
+    threshold_abs=None,
+    threshold_rel=None,
+    exclude_border=True,
+    indices=True,
+    num_peaks=np.inf,
+    footprint=None,
+    labels=None,
+    *,
+    num_peaks_per_label=np.inf,
+    p_norm=np.inf,
+):
     """Find peaks in corner measure response image.
 
     This differs from `skimage.feature.peak_local_max` in that it suppresses
@@ -1090,13 +1203,17 @@ def corner_peaks(image, min_distance=1, threshold_abs=None, threshold_rel=None,
         num_peaks = None
 
     # Get the coordinates of the detected peaks
-    coords = peak_local_max(image, min_distance=min_distance,
-                            threshold_abs=threshold_abs,
-                            threshold_rel=threshold_rel,
-                            exclude_border=exclude_border,
-                            num_peaks=np.inf,
-                            footprint=footprint, labels=labels,
-                            num_peaks_per_label=num_peaks_per_label)
+    coords = peak_local_max(
+        image,
+        min_distance=min_distance,
+        threshold_abs=threshold_abs,
+        threshold_rel=threshold_rel,
+        exclude_border=exclude_border,
+        num_peaks=np.inf,
+        footprint=footprint,
+        labels=labels,
+        num_peaks_per_label=num_peaks_per_label,
+    )
 
     if len(coords):
         # Use KDtree to find the peaks that are too close to each other
@@ -1105,14 +1222,12 @@ def corner_peaks(image, min_distance=1, threshold_abs=None, threshold_rel=None,
         rejected_peaks_indices = set()
         for idx, point in enumerate(coords):
             if idx not in rejected_peaks_indices:
-                candidates = tree.query_ball_point(point, r=min_distance,
-                                                   p=p_norm)
+                candidates = tree.query_ball_point(point, r=min_distance, p=p_norm)
                 candidates.remove(idx)
                 rejected_peaks_indices.update(candidates)
 
         # Remove the peaks that are too close to each other
-        coords = np.delete(coords, tuple(rejected_peaks_indices),
-                           axis=0)[:num_peaks]
+        coords = np.delete(coords, tuple(rejected_peaks_indices), axis=0)[:num_peaks]
 
     if indices:
         return coords

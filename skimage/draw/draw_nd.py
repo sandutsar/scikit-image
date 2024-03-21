@@ -42,9 +42,7 @@ def _round_safe(coords):
     >>> _round_safe(coords1)
     array([0, 1, 2, 3, 4, 5, 6, 7])
     """
-    if (len(coords) > 1
-            and coords[0] % 1 == 0.5
-            and coords[1] - coords[0] == 1):
+    if len(coords) > 1 and coords[0] % 1 == 0.5 and coords[1] - coords[0] == 1:
         _round_function = np.floor
     else:
         _round_function = np.round
@@ -55,7 +53,7 @@ def line_nd(start, stop, *, endpoint=False, integer=True):
     """Draw a single-pixel thick line in n dimensions.
 
     The line produced will be ndim-connected. That is, two subsequent
-    pixels in the line will be either direct or diagonal neighbours in
+    pixels in the line will be either direct or diagonal neighbors in
     n dimensions.
 
     Parameters

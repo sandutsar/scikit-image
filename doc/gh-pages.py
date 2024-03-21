@@ -11,9 +11,9 @@ that is how the resulting directory will be named.
 In practice, you should use either actual clean tags from a current build or
 something like 'current' as a stable URL for the mest current version of the """
 
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # Imports
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 import os
 import re
 import shutil
@@ -22,18 +22,19 @@ from os import chdir as cd
 
 from subprocess import Popen, PIPE, CalledProcessError, check_call
 
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # Globals
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 
 pages_dir = 'gh-pages'
 html_dir = 'build/html'
 pdf_dir = 'build/latex'
 pages_repo = 'https://github.com/scikit-image/docs.git'
 
-#-----------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
 # Functions
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 def sh(cmd):
     """Execute command in a subshell, return status code."""
     return check_call(cmd, shell=True)
@@ -68,15 +69,16 @@ def sh3(cmd):
 
 def init_repo(path):
     """clone the gh-pages repo if we haven't already."""
-    sh("git clone %s %s"%(pages_repo, path))
+    sh(f'git clone --branch gh-pages {pages_repo} {path} --depth 1')
     here = os.getcwd()
     cd(path)
     sh('git checkout gh-pages')
     cd(here)
 
-#-----------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
 # Script starts
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 if __name__ == '__main__':
     # find the version number from skimage/__init__.py
     setup_lines = open('../skimage/__init__.py').readlines()
@@ -92,7 +94,6 @@ if __name__ == '__main__':
                 tag = '.'.join(tag.split('.')[:-1] + ['x'])
 
             break
-
 
     startdir = os.getcwd()
     if not os.path.exists(pages_dir):
@@ -111,24 +112,23 @@ if __name__ == '__main__':
     shutil.rmtree(dest, ignore_errors=True)
     shutil.copytree(html_dir, dest)
     # copy pdf file into tree
-    #shutil.copy(pjoin(pdf_dir, 'scikits.image.pdf'), pjoin(dest, 'scikits.image.pdf'))
+    # shutil.copy(pjoin(pdf_dir, 'scikits.image.pdf'), pjoin(dest, 'scikits.image.pdf'))
 
     try:
         cd(pages_dir)
         status = sh2('git status | head -1')
         branch = re.match(b'On branch (.*)$', status).group(1)
         if branch != b'gh-pages':
-            e = 'On %r, git branch is %r, MUST be "gh-pages"' % (pages_dir,
-                                                                 branch)
+            e = f'On {pages_dir!r}, git branch is {branch!r}, MUST be "gh-pages"'
             raise RuntimeError(e)
         sh("touch .nojekyll")
         sh('git add .nojekyll')
         sh('git add index.html')
-        sh('git add --all %s' % tag)
+        sh(f'git add --all {tag}')
 
         status = sh2('git status | tail -1')
         if not re.match(b'nothing to commit', status):
-            sh2('git commit -m"Updated doc release: %s"' % tag)
+            sh2(f'git commit -m"Updated doc release: {tag}"')
         else:
             print('\n! Note: no changes to commit\n')
 
@@ -139,5 +139,5 @@ if __name__ == '__main__':
         cd(startdir)
 
     print('')
-    print('Now verify the build in: %r' % dest)
+    print(f'Now verify the build in: {dest!r}')
     print("If everything looks good, run 'git push' inside doc/gh-pages.")

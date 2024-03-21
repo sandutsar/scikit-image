@@ -37,8 +37,8 @@ def _grid_points_in_poly(shape, verts):
     """
     verts = np.asarray(verts)
 
-    cdef cnp.float64_t[::1] vx = verts[:, 0].astype(np.double)
-    cdef cnp.float64_t[::1] vy = verts[:, 1].astype(np.double)
+    cdef cnp.float64_t[::1] vx = verts[:, 0].astype(np.float64)
+    cdef cnp.float64_t[::1] vy = verts[:, 1].astype(np.float64)
 
     cdef Py_ssize_t M = shape[0]
     cdef Py_ssize_t N = shape[1]
@@ -52,7 +52,7 @@ def _grid_points_in_poly(shape, verts):
             for n in range(N):
                 out[m, n] = point_in_polygon(vx, vy, m, n)
 
-    return out.view(bool)
+    return out
 
 
 def _points_in_poly(points, verts):
@@ -60,9 +60,9 @@ def _points_in_poly(points, verts):
 
     Parameters
     ----------
-    points : (N, 2) array
+    points : (K, 2) array
         Input points, ``(x, y)``.
-    verts : (M, 2) array
+    verts : (V, 2) array
         Vertices of the polygon, sorted either clockwise or anti-clockwise.
         The first point may (but does not need to be) duplicated.
 
@@ -72,18 +72,18 @@ def _points_in_poly(points, verts):
 
     Returns
     -------
-    mask : (N,) array of bool
+    mask : (K,) array of bool
         True if corresponding point is inside the polygon.
 
     """
     points = np.asarray(points)
     verts = np.asarray(verts)
 
-    cdef cnp.float64_t[::1] x = points[:, 0].astype(np.double)
-    cdef cnp.float64_t[::1] y = points[:, 1].astype(np.double)
+    cdef cnp.float64_t[::1] x = points[:, 0].astype(np.float64)
+    cdef cnp.float64_t[::1] y = points[:, 1].astype(np.float64)
 
-    cdef cnp.float64_t[::1] vx = verts[:, 0].astype(np.double)
-    cdef cnp.float64_t[::1] vy = verts[:, 1].astype(np.double)
+    cdef cnp.float64_t[::1] vx = verts[:, 0].astype(np.float64)
+    cdef cnp.float64_t[::1] vy = verts[:, 1].astype(np.float64)
 
     cdef unsigned char[::1] out = np.zeros(x.shape[0], dtype=bool)
 

@@ -5,9 +5,7 @@ from .._shared import utils
 
 
 @utils.channel_as_last_axis(multichannel_output=False)
-@utils.deprecate_multichannel_kwarg(multichannel_position=4)
-def felzenszwalb(image, scale=1, sigma=0.8, min_size=20, multichannel=True, *,
-                 channel_axis=-1):
+def felzenszwalb(image, scale=1, sigma=0.8, min_size=20, *, channel_axis=-1):
     """Computes Felsenszwalb's efficient graph based image segmentation.
 
     Produces an oversegmentation of a multichannel (i.e. RGB) image
@@ -25,7 +23,7 @@ def felzenszwalb(image, scale=1, sigma=0.8, min_size=20, multichannel=True, *,
 
     Parameters
     ----------
-    image : (width, height, 3) or (width, height) ndarray
+    image : (M, N[, 3]) ndarray
         Input image.
     scale : float
         Free parameter. Higher means larger clusters.
@@ -33,10 +31,6 @@ def felzenszwalb(image, scale=1, sigma=0.8, min_size=20, multichannel=True, *,
         Width (standard deviation) of Gaussian kernel used in preprocessing.
     min_size : int
         Minimum component size. Enforced using postprocessing.
-    multichannel : bool, optional (default: True)
-        Whether the last axis of the image is to be interpreted as multiple
-        channels. A value of False, for a 3D image, is not currently supported.
-        This argument is deprecated: specify `channel_axis` instead.
     channel_axis : int or None, optional
         If None, the image is assumed to be a grayscale (single channel) image.
         Otherwise, this parameter indicates which axis of the array corresponds
@@ -47,7 +41,7 @@ def felzenszwalb(image, scale=1, sigma=0.8, min_size=20, multichannel=True, *,
 
     Returns
     -------
-    segment_mask : (width, height) ndarray
+    segment_mask : (M, N) ndarray
         Integer mask indicating segment labels.
 
     References
@@ -67,9 +61,9 @@ def felzenszwalb(image, scale=1, sigma=0.8, min_size=20, multichannel=True, *,
     >>> segments = felzenszwalb(img, scale=3.0, sigma=0.95, min_size=5)
     """
     if channel_axis is None and image.ndim > 2:
-        raise ValueError("This algorithm works only on single or "
-                         "multi-channel 2d images. ")
+        raise ValueError(
+            "This algorithm works only on single or " "multi-channel 2d images. "
+        )
 
     image = np.atleast_3d(image)
-    return _felzenszwalb_cython(image, scale=scale, sigma=sigma,
-                                min_size=min_size)
+    return _felzenszwalb_cython(image, scale=scale, sigma=sigma, min_size=min_size)

@@ -5,20 +5,20 @@ import numpy as np
 from .version_requirements import require
 
 
-@require("matplotlib", ">=3.0.3")
+@require("matplotlib", ">=3.3")
 def polygon_clip(rp, cp, r0, c0, r1, c1):
     """Clip a polygon to the given bounding box.
 
     Parameters
     ----------
-    rp, cp : (N,) ndarray of double
+    rp, cp : (K,) ndarray of double
         Row and column coordinates of the polygon.
     (r0, c0), (r1, c1) : double
         Top-left and bottom-right coordinates of the bounding box.
 
     Returns
     -------
-    r_clipped, c_clipped : (M,) ndarray of double
+    r_clipped, c_clipped : (L,) ndarray of double
         Coordinates of clipped polygon.
 
     Notes
@@ -33,10 +33,6 @@ def polygon_clip(rp, cp, r0, c0, r1, c1):
     clip_rect = transforms.Bbox([[r0, c0], [r1, c1]])
     poly_clipped = poly.clip_to_bbox(clip_rect).to_polygons()[0]
 
-    # This should be fixed in matplotlib >1.5
-    if np.all(poly_clipped[-1] == poly_clipped[-2]):
-        poly_clipped = poly_clipped[:-1]
-
     return poly_clipped[:, 0], poly_clipped[:, 1]
 
 
@@ -45,7 +41,7 @@ def polygon_area(pr, pc):
 
     Parameters
     ----------
-    pr, pc : (N,) array of float
+    pr, pc : (K,) array of float
         Polygon row and column coordinates.
 
     Returns

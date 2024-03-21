@@ -9,28 +9,40 @@ from collections.abc import Iterable
 import numpy as np
 from scipy import ndimage as ndi
 
-from .._shared import utils
-from .._shared.utils import _supported_float_type, convert_to_float, warn
+from .._shared.utils import (
+    _supported_float_type,
+    convert_to_float,
+    deprecate_parameter,
+    DEPRECATED,
+)
 
 
-@utils.deprecate_multichannel_kwarg(multichannel_position=5)
-def gaussian(image, sigma=1, output=None, mode='nearest', cval=0,
-             multichannel=None, preserve_range=False, truncate=4.0, *,
-             channel_axis=None):
+@deprecate_parameter(
+    "output", new_name="out", start_version="0.23", stop_version="0.25"
+)
+def gaussian(
+    image,
+    sigma=1,
+    output=DEPRECATED,
+    mode='nearest',
+    cval=0,
+    preserve_range=False,
+    truncate=4.0,
+    *,
+    channel_axis=None,
+    out=None,
+):
     """Multi-dimensional Gaussian filter.
 
     Parameters
     ----------
-    image : array-like
+    image : ndarray
         Input image (grayscale or color) to filter.
     sigma : scalar or sequence of scalars, optional
         Standard deviation for Gaussian kernel. The standard
         deviations of the Gaussian filter are given for each axis as a
         sequence, or as a single number, in which case it is equal for
         all axes.
-    output : array, optional
-        The ``output`` parameter passes an array in which to store the
-        filter output.
     mode : {'reflect', 'constant', 'nearest', 'mirror', 'wrap'}, optional
         The ``mode`` parameter determines how the array borders are
         handled, where ``cval`` is the value when mode is equal to
@@ -38,13 +50,6 @@ def gaussian(image, sigma=1, output=None, mode='nearest', cval=0,
     cval : scalar, optional
         Value to fill past edges of input if ``mode`` is 'constant'. Default
         is 0.0
-    multichannel : bool, optional (default: None)
-        Whether the last axis of the image is to be interpreted as multiple
-        channels. If True, each channel is filtered separately (channels are
-        not mixed together). Only 3 channels are supported. If ``None``,
-        the function will attempt to guess this, and raise a warning if
-        ambiguous, when the array has shape (M, N, 3).
-        This argument is deprecated: specify `channel_axis` instead.
     preserve_range : bool, optional
         If True, keep the original range of values. Otherwise, the input
         ``image`` is converted according to the conventions of ``img_as_float``
@@ -61,7 +66,12 @@ def gaussian(image, sigma=1, output=None, mode='nearest', cval=0,
         to channels.
 
         .. versionadded:: 0.19
-           ``channel_axis`` was added in 0.19.
+           `channel_axis` was added in 0.19.
+    out : ndarray, optional
+        If given, the filtered image will be stored in this array.
+
+        .. versionadded:: 0.23
+            `out` was added in 0.23.
 
     Returns
     -------
@@ -70,12 +80,12 @@ def gaussian(image, sigma=1, output=None, mode='nearest', cval=0,
 
     Notes
     -----
-    This function is a wrapper around :func:`scipy.ndi.gaussian_filter`.
+    This function is a wrapper around :func:`scipy.ndimage.gaussian_filter`.
 
     Integer arrays are converted to float.
 
-    The ``output`` should be floating point data type since gaussian converts
-    to float provided ``image``. If ``output`` is not provided, another array
+    `out` should be of floating-point data type since `gaussian` converts the
+    input `image` to float. If `out` is not provided, another array
     will be allocated and returned as the result.
 
     The multi-dimensional filter is implemented as a sequence of
@@ -87,38 +97,31 @@ def gaussian(image, sigma=1, output=None, mode='nearest', cval=0,
 
     Examples
     --------
-
+    >>> import skimage as ski
     >>> a = np.zeros((3, 3))
     >>> a[1, 1] = 1
     >>> a
     array([[0., 0., 0.],
            [0., 1., 0.],
            [0., 0., 0.]])
-    >>> gaussian(a, sigma=0.4)  # mild smoothing
+    >>> ski.filters.gaussian(a, sigma=0.4)  # mild smoothing
     array([[0.00163116, 0.03712502, 0.00163116],
            [0.03712502, 0.84496158, 0.03712502],
            [0.00163116, 0.03712502, 0.00163116]])
-    >>> gaussian(a, sigma=1)  # more smoothing
+    >>> ski.filters.gaussian(a, sigma=1)  # more smoothing
     array([[0.05855018, 0.09653293, 0.05855018],
            [0.09653293, 0.15915589, 0.09653293],
            [0.05855018, 0.09653293, 0.05855018]])
     >>> # Several modes are possible for handling boundaries
-    >>> gaussian(a, sigma=1, mode='reflect')
+    >>> ski.filters.gaussian(a, sigma=1, mode='reflect')
     array([[0.08767308, 0.12075024, 0.08767308],
            [0.12075024, 0.16630671, 0.12075024],
            [0.08767308, 0.12075024, 0.08767308]])
     >>> # For RGB images, each is filtered separately
-    >>> from skimage.data import astronaut
-    >>> image = astronaut()
-    >>> filtered_img = gaussian(image, sigma=1, channel_axis=-1)
+    >>> image = ski.data.astronaut()
+    >>> filtered_img = ski.filters.gaussian(image, sigma=1, channel_axis=-1)
 
     """
-    if image.ndim == 3 and image.shape[-1] == 3 and channel_axis is None:
-        msg = ("Images with dimensions (M, N, 3) are interpreted as 2D+RGB "
-               "by default. Use `multichannel=False` to interpret as "
-               "3D image with last dimension of length 3.")
-        warn(RuntimeWarning(msg))
-        channel_axis = -1
     if np.any(np.asarray(sigma) < 0.0):
         raise ValueError("Sigma values less than zero are not valid")
     if channel_axis is not None:
@@ -131,7 +134,8 @@ def gaussian(image, sigma=1, output=None, mode='nearest', cval=0,
     image = convert_to_float(image, preserve_range)
     float_dtype = _supported_float_type(image.dtype)
     image = image.astype(float_dtype, copy=False)
-    if (output is not None) and (not np.issubdtype(output.dtype, np.floating)):
-        raise ValueError("Provided output data type is not float")
-    return ndi.gaussian_filter(image, sigma, output=output,
-                               mode=mode, cval=cval, truncate=truncate)
+    if (out is not None) and (not np.issubdtype(out.dtype, np.floating)):
+        raise ValueError(f"dtype of `out` must be float; got {out.dtype!r}.")
+    return ndi.gaussian_filter(
+        image, sigma, output=out, mode=mode, cval=cval, truncate=truncate
+    )

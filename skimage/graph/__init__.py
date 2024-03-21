@@ -1,22 +1,11 @@
-from ._graph import pixel_graph, central_pixel
-from .spath import shortest_path
-from .mcp import MCP, MCP_Geometric, MCP_Connect, MCP_Flexible, route_through_array
+"""
+This moddule provides utilities for graph-based image processing.
 
+This includes creating adjacency graphs of pixels in an image, finding the
+central pixel in an image, finding (minimum-cost) paths across pixels, merging
+and cutting of graphs, etc.
 
-__all__ = [
-        'pixel_graph',
-        'central_pixel',
-        'shortest_path',
-        'MCP',
-        'MCP_Geometric',
-        'MCP_Connect',
-        'MCP_Flexible',
-        'route_through_array',
-        'rag_mean_color',
-        'cut_threshold',
-        'cut_normalized',
-        'ncut',
-        'draw_rag',
-        'merge_hierarchical',
-        'RAG',
-        ]
+"""
+import lazy_loader as lazy
+
+__getattr__, __dir__, __all__ = lazy.attach_stub(__name__, __file__)

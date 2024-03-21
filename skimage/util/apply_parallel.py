@@ -1,7 +1,5 @@
 import numpy
 
-from .._shared.utils import channel_as_last_axis, deprecate_multichannel_kwarg
-
 __all__ = ['apply_parallel']
 
 
@@ -27,7 +25,7 @@ def _get_chunks(shape, ncpu):
     from math import ceil
 
     chunks = []
-    nchunks_per_dim = int(ceil(ncpu ** (1./len(shape))))
+    nchunks_per_dim = int(ceil(ncpu ** (1.0 / len(shape))))
 
     used_chunks = 1
     for i in shape:
@@ -38,8 +36,9 @@ def _get_chunks(shape, ncpu):
             if regular_chunk == 0:
                 chunk_lens = (remainder_chunk,)
             else:
-                chunk_lens = ((regular_chunk,) * (nchunks_per_dim - 1) +
-                              (remainder_chunk,))
+                chunk_lens = (regular_chunk,) * (nchunks_per_dim - 1) + (
+                    remainder_chunk,
+                )
         else:
             chunk_lens = (i,)
 
@@ -50,17 +49,26 @@ def _get_chunks(shape, ncpu):
 
 def _ensure_dask_array(array, chunks=None):
     import dask.array as da
+
     if isinstance(array, da.Array):
         return array
 
     return da.from_array(array, chunks=chunks)
 
 
-@deprecate_multichannel_kwarg()
-def apply_parallel(function, array, chunks=None, depth=0, mode=None,
-                   extra_arguments=(), extra_keywords={}, *, dtype=None,
-                   compute=None, channel_axis=None,
-                   multichannel=False):
+def apply_parallel(
+    function,
+    array,
+    chunks=None,
+    depth=0,
+    mode=None,
+    extra_arguments=(),
+    extra_keywords=None,
+    *,
+    dtype=None,
+    compute=None,
+    channel_axis=None,
+):
     """Map a function in parallel across an array.
 
     Split an array into possibly overlapping chunks of a given depth and
@@ -113,17 +121,6 @@ def apply_parallel(function, array, chunks=None, depth=0, mode=None,
         If None, the image is assumed to be a grayscale (single channel) image.
         Otherwise, this parameter indicates which axis of the array corresponds
         to channels.
-    multichannel : bool, optional
-        If `chunks` is None and `multichannel` is True, this function will keep
-        only a single chunk along the channels axis. When `depth` is specified
-        as a scalar value, that depth will be applied only to the non-channels
-        axes (a depth of 0 will be used along the channels axis). If the user
-        manually specified both `chunks` and a `depth` tuple, then this
-        argument will have no effect. This argument is deprecated: specify
-        `channel_axis` instead.
-
-        .. versionadded:: 0.18
-           ``multichannel`` was added in 0.18.
 
     Returns
     -------
@@ -146,8 +143,12 @@ def apply_parallel(function, array, chunks=None, depth=0, mode=None,
         # minimum import path of skimage, we lazy attempt to import dask
         import dask.array as da
     except ImportError:
-        raise RuntimeError("Could not import 'dask'.  Please install "
-                           "using 'pip install dask'")
+        raise RuntimeError(
+            "Could not import 'dask'.  Please install " "using 'pip install dask'"
+        )
+
+    if extra_keywords is None:
+        extra_keywords = {}
 
     if compute is None:
         compute = not isinstance(array, da.Array)
@@ -161,12 +162,13 @@ def apply_parallel(function, array, chunks=None, depth=0, mode=None,
             # since apply_parallel is in the critical import path, we lazy
             # import multiprocessing just when we need it.
             from multiprocessing import cpu_count
+
             ncpu = cpu_count()
         except NotImplementedError:
             ncpu = 4
         if channel_axis is not None:
             # use a single chunk along the channel axis
-            spatial_shape = shape[:channel_axis] + shape[channel_axis + 1:]
+            spatial_shape = shape[:channel_axis] + shape[channel_axis + 1 :]
             chunks = list(_get_chunks(spatial_shape, ncpu))
             chunks.insert(channel_axis, shape[channel_axis])
             chunks = tuple(chunks)
@@ -184,6 +186,11 @@ def apply_parallel(function, array, chunks=None, depth=0, mode=None,
         mode = 'reflect'
     elif mode == 'edge':
         mode = 'nearest'
+    elif mode is None:
+        # default value for Dask.
+        # Note: that for dask >= 2022.03 it will change to 'none' so we set it
+        #       here for consistent behavior across Dask versions.
+        mode = 'reflect'
 
     if channel_axis is not None:
         if numpy.isscalar(depth):

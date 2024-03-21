@@ -3,13 +3,17 @@ from skimage import data
 from skimage.segmentation import felzenszwalb
 
 from skimage._shared import testing
-from skimage._shared.testing import (assert_greater, test_parallel,
-                                     assert_equal, assert_array_equal,
-                                     assert_warns, assert_no_warnings,
-                                     expected_warnings)
+from skimage._shared.testing import (
+    assert_greater,
+    run_in_parallel,
+    assert_equal,
+    assert_array_equal,
+    assert_warns,
+    assert_no_warnings,
+)
 
 
-@test_parallel()
+@run_in_parallel()
 def test_grey():
     # very weak tests.
     img = np.zeros((20, 21))
@@ -58,14 +62,6 @@ def test_3D(channel_axis):
     with testing.raises(ValueError):
         felzenszwalb(rgb_img, channel_axis=None)
         felzenszwalb(three_d_img, channel_axis=None)
-
-
-def test_3D_multichannel_deprecation():
-    rgb_img = np.zeros((10, 10, 3))
-    with expected_warnings(["`multichannel` is a deprecated argument"]):
-        felzenszwalb(rgb_img, multichannel=True)
-    with expected_warnings(["Providing the `multichannel` argument"]):
-        felzenszwalb(rgb_img, 1, 0.8, 2, True)
 
 
 def test_color():

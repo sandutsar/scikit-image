@@ -1,21 +1,10 @@
-"""
-This morphological reconstruction routine was adapted from CellProfiler, code
-licensed under both GPL and BSD licenses.
-
-Website: http://www.cellprofiler.org
-Copyright (c) 2003-2009 Massachusetts Institute of Technology
-Copyright (c) 2009-2011 Broad Institute
-All rights reserved.
-Original author: Lee Kamentsky
-
-"""
 import numpy as np
 
-from .._shared.utils import deprecate_kwarg
+from .._shared.utils import _supported_float_type
 from ..filters._rank_order import rank_order
+from ._grayreconstruct import reconstruction_loop
 
 
-@deprecate_kwarg(kwarg_mapping={'selem': 'footprint'}, removed_version="1.0")
 def reconstruction(seed, mask, method='dilation', footprint=None, offset=None):
     """Perform a morphological reconstruction of an image.
 
@@ -127,20 +116,20 @@ def reconstruction(seed, mask, method='dilation', footprint=None, offset=None):
     """
     assert tuple(seed.shape) == tuple(mask.shape)
     if method == 'dilation' and np.any(seed > mask):
-        raise ValueError("Intensity of seed image must be less than that "
-                         "of the mask image for reconstruction by dilation.")
+        raise ValueError(
+            "Intensity of seed image must be less than that "
+            "of the mask image for reconstruction by dilation."
+        )
     elif method == 'erosion' and np.any(seed < mask):
-        raise ValueError("Intensity of seed image must be greater than that "
-                         "of the mask image for reconstruction by erosion.")
-    try:
-        from ._grayreconstruct import reconstruction_loop
-    except ImportError:
-        raise ImportError("_grayreconstruct extension not available.")
+        raise ValueError(
+            "Intensity of seed image must be greater than that "
+            "of the mask image for reconstruction by erosion."
+        )
 
     if footprint is None:
         footprint = np.ones([3] * seed.ndim, dtype=bool)
     else:
-        footprint = footprint.astype(bool)
+        footprint = footprint.astype(bool, copy=True)
 
     if offset is None:
         if not all([d % 2 == 1 for d in footprint.shape]):
@@ -167,33 +156,47 @@ def reconstruction(seed, mask, method='dilation', footprint=None, offset=None):
     elif method == 'erosion':
         pad_value = np.max(seed)
     else:
-        raise ValueError("Reconstruction method can be one of 'erosion' "
-                         "or 'dilation'. Got '%s'." % method)
-    images = np.full(dims, pad_value, dtype='float64')
+        raise ValueError(
+            "Reconstruction method can be one of 'erosion' "
+            f"or 'dilation'. Got '{method}'."
+        )
+    float_dtype = _supported_float_type(mask.dtype)
+    images = np.full(dims, pad_value, dtype=float_dtype)
     images[(0, *inside_slices)] = seed
     images[(1, *inside_slices)] = mask
+
+    # determine whether image is large enough to require 64-bit integers
+    isize = images.size
+    # use -isize so we get a signed dtype rather than an unsigned one
+    signed_int_dtype = np.result_type(np.min_scalar_type(-isize), np.int32)
+    # the corresponding unsigned type has same char, but uppercase
+    unsigned_int_dtype = np.dtype(signed_int_dtype.char.upper())
 
     # Create a list of strides across the array to get the neighbors within
     # a flattened array
     value_stride = np.array(images.strides[1:]) // images.dtype.itemsize
     image_stride = images.strides[0] // images.dtype.itemsize
-    footprint_mgrid = np.mgrid[[slice(-o, d - o)
-                                for d, o in zip(footprint.shape, offset)]]
+    footprint_mgrid = np.mgrid[
+        [slice(-o, d - o) for d, o in zip(footprint.shape, offset)]
+    ]
     footprint_offsets = footprint_mgrid[:, footprint].transpose()
-    nb_strides = np.array([np.sum(value_stride * footprint_offset)
-                           for footprint_offset in footprint_offsets],
-                          np.int32)
-
-    images = images.flatten()
+    nb_strides = np.array(
+        [
+            np.sum(value_stride * footprint_offset)
+            for footprint_offset in footprint_offsets
+        ],
+        signed_int_dtype,
+    )
+    images = images.reshape(-1)
 
     # Erosion goes smallest to largest; dilation goes largest to smallest.
-    index_sorted = np.argsort(images).astype(np.int32)
+    index_sorted = np.argsort(images).astype(signed_int_dtype, copy=False)
     if method == 'dilation':
         index_sorted = index_sorted[::-1]
 
     # Make a linked list of pixels sorted by value. -1 is the list terminator.
-    prev = np.full(len(images), -1, np.int32)
-    next = np.full(len(images), -1, np.int32)
+    prev = np.full(isize, -1, signed_int_dtype)
+    next = np.full(isize, -1, signed_int_dtype)
     prev[index_sorted[1:]] = index_sorted[:-1]
     next[index_sorted[:-1]] = index_sorted[1:]
 
@@ -205,8 +208,8 @@ def reconstruction(seed, mask, method='dilation', footprint=None, offset=None):
         value_map = -value_map
 
     start = index_sorted[0]
-    reconstruction_loop(value_rank, prev, next, nb_strides, start,
-                        image_stride)
+    value_rank = value_rank.astype(unsigned_int_dtype, copy=False)
+    reconstruction_loop(value_rank, prev, next, nb_strides, start, image_stride)
 
     # Reshape reconstructed image to original image shape and remove padding.
     rec_img = value_map[value_rank[:image_stride]]

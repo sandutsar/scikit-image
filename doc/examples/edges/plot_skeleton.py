@@ -22,8 +22,7 @@ image = invert(data.horse())
 skeleton = skeletonize(image)
 
 # display results
-fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(8, 4),
-                         sharex=True, sharey=True)
+fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(8, 4), sharex=True, sharey=True)
 
 ax = axes.ravel()
 
@@ -45,7 +44,7 @@ plt.show()
 # the image, removing pixels on object borders. This continues until no
 # more pixels can be removed.  The image is correlated with a
 # mask that assigns each pixel a number in the range [0...255]
-# corresponding to each possible pattern of its 8 neighbouring
+# corresponding to each possible pattern of its 8 neighboring
 # pixels. A look up table is then used to assign the pixels a
 # value of 0, 1, 2 or 3, which are selectively removed during
 # the iterations.
@@ -74,8 +73,7 @@ plt.show()
 import matplotlib.pyplot as plt
 from skimage.morphology import skeletonize
 
-blobs = data.binary_blobs(200, blob_size_fraction=.2,
-                          volume_fraction=.35, seed=1)
+blobs = data.binary_blobs(200, blob_size_fraction=0.2, volume_fraction=0.35, rng=1)
 
 skeleton = skeletonize(blobs)
 skeleton_lee = skeletonize(blobs, method='lee')
@@ -118,8 +116,7 @@ plt.show()
 from skimage.morphology import medial_axis, skeletonize
 
 # Generate the data
-blobs = data.binary_blobs(200, blob_size_fraction=.2,
-                          volume_fraction=.35, seed=1)
+blobs = data.binary_blobs(200, blob_size_fraction=0.2, volume_fraction=0.35, rng=1)
 
 # Compute the medial axis (skeleton) and the distance transform
 skel, distance = medial_axis(blobs, return_distance=True)

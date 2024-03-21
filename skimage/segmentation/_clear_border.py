@@ -1,13 +1,9 @@
 import numpy as np
 
 from ..measure import label
-from .._shared.utils import remove_arg
 
 
-@remove_arg("in_place", changed_version="1.0",
-            help_msg="Please use out argument instead.")
-def clear_border(labels, buffer_size=0, bgval=0, in_place=False, mask=None,
-                 *, out=None):
+def clear_border(labels, buffer_size=0, bgval=0, mask=None, *, out=None):
     """Clear objects connected to the label image border.
 
     Parameters
@@ -19,9 +15,6 @@ def clear_border(labels, buffer_size=0, bgval=0, in_place=False, mask=None,
         that touch the outside of the image are removed.
     bgval : float or int, optional
         Cleared objects are set to this value.
-    in_place : bool, optional
-        Whether or not to manipulate the labels array in-place.
-        Deprecated since version 0.19. Please use `out` instead.
     mask : ndarray of bool, same shape as `image`, optional.
         Image data mask. Objects in labels image overlapping with
         False pixels of mask will be removed. If defined, the
@@ -67,24 +60,20 @@ def clear_border(labels, buffer_size=0, bgval=0, in_place=False, mask=None,
            [0, 0, 0, 0, 0, 0, 0, 0, 0]])
 
     """
-    if any((buffer_size >= s for s in labels.shape)) and mask is None:
+    if any(buffer_size >= s for s in labels.shape) and mask is None:
         # ignore buffer_size if mask
         raise ValueError("buffer size may not be greater than labels size")
 
-    if out is not None:
-        np.copyto(out, labels, casting='no')
-        in_place = True
-
-    if not in_place:
+    if out is None:
         out = labels.copy()
-    elif out is None:
-        out = labels
 
     if mask is not None:
-        err_msg = (f'labels and mask should have the same shape but '
-                   f'are {out.shape} and {mask.shape}')
+        err_msg = (
+            f'labels and mask should have the same shape but '
+            f'are {out.shape} and {mask.shape}'
+        )
         if out.shape != mask.shape:
-            raise(ValueError, err_msg)
+            raise (ValueError, err_msg)
         if mask.dtype != bool:
             raise TypeError("mask should be of type bool.")
         borders = ~mask
@@ -110,7 +99,7 @@ def clear_border(labels, buffer_size=0, bgval=0, in_place=False, mask=None,
     borders_indices = np.unique(labels[borders])
     indices = np.arange(number + 1)
     # mask all label indices that are connected to borders
-    label_mask = np.in1d(indices, borders_indices)
+    label_mask = np.isin(indices, borders_indices)
     # create mask for pixels to clear
     mask = label_mask[labels.reshape(-1)].reshape(labels.shape)
 

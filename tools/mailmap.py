@@ -14,12 +14,13 @@ from editdistance import eval as dist
 
 threshold = 5
 
+
 def call(cmd):
-    return subprocess.check_output(shlex.split(cmd), universal_newlines=True).split('\n')
+    return subprocess.check_output(shlex.split(cmd), text=True).split('\n')
 
 
 def _clean_email(email):
-    if not '@' in email:
+    if '@' not in email:
         return
 
     name, domain = email.split('@')
@@ -33,7 +34,7 @@ authors = call("git log --format='%aN::%aE'")
 
 names, emails = [], []
 
-for (name, email) in (author.split('::') for author in authors if author.strip()):
+for name, email in (author.split('::') for author in authors if author.strip()):
     if email not in emails:
         names.append(name)
         emails.append(email)
@@ -46,12 +47,12 @@ for i in range(1, N):
         D[i, j] = dist(names[i], names[j])
 
 for i in range(N):
-    dupes, = np.where(D[:, i] < threshold)
+    (dupes,) = np.where(D[:, i] < threshold)
     for j in dupes:
         names[j] = names[i]
 
 mailmap = defaultdict(set)
-for (name, email) in zip(names, emails):
+for name, email in zip(names, emails):
     email = _clean_email(email)
     if email:
         mailmap[name].add(email)
@@ -63,7 +64,7 @@ for key, value in list(mailmap.items()):
 entries = []
 for name, emails in mailmap.items():
     entries.append([name])
-    entries[-1].extend(['<{}>'.format(email) for email in emails])
+    entries[-1].extend([f'<{email}>' for email in emails])
 
 entries = sorted(entries, key=lambda x: x[0].split()[-1])
 for entry in entries:

@@ -5,24 +5,24 @@
 
 cimport numpy as cnp
 import numpy as np
-from libc.math cimport exp, fabs, sqrt
+from libc.math cimport sqrt
 from libc.float cimport DBL_MAX
 from .._shared.interpolation cimport get_pixel3d
 from .._shared.fused_numerics cimport np_floats
 
 cnp.import_array()
 
-cdef inline Py_ssize_t Py_ssize_t_min(Py_ssize_t value1, Py_ssize_t value2) nogil:
+cdef inline Py_ssize_t Py_ssize_t_min(Py_ssize_t value1, Py_ssize_t value2) noexcept nogil:
     if value1 < value2:
         return value1
     else:
         return value2
 
 
-def _denoise_bilateral(np_floats[:, :, ::1] image, double max_value,
-                       Py_ssize_t win_size, double sigma_color,
-                       double sigma_spatial, Py_ssize_t bins, mode,
-                       double cval, np_floats[::1] color_lut,
+def _denoise_bilateral(np_floats[:, :, ::1] image, cnp.float64_t max_value,
+                       Py_ssize_t win_size, cnp.float64_t sigma_color,
+                       cnp.float64_t sigma_spatial, Py_ssize_t bins, mode,
+                       cnp.float64_t cval, np_floats[::1] color_lut,
                        np_floats[::1] range_lut, np_floats[::1] empty_dims,
                        np_floats[:, :, ::1] out):
     cdef:
@@ -32,7 +32,7 @@ def _denoise_bilateral(np_floats[:, :, ::1] image, double max_value,
         Py_ssize_t window_ext = (win_size - 1) / 2
         Py_ssize_t max_color_lut_bin = bins - 1
 
-        Py_ssize_t r, c, d, wr, wc, kr, kc, rr, cc, pixel_addr, color_lut_bin
+        Py_ssize_t r, c, d, wr, wc, kr, kc, rr, cc, color_lut_bin
         np_floats value, weight, dist, total_weight, csigma_color, color_weight, \
                range_weight, t
         np_floats dist_scale
@@ -97,19 +97,15 @@ def _denoise_bilateral(np_floats[:, :, ::1] image, double max_value,
 
 
 def _denoise_tv_bregman(np_floats[:, :, ::1] image, np_floats weight,
-                        int max_num_iter, double eps,
+                        int max_num_iter, cnp.float64_t eps,
                         char isotropic, np_floats[:, :, ::1] out):
     cdef:
         Py_ssize_t rows = image.shape[0]
         Py_ssize_t cols = image.shape[1]
         Py_ssize_t dims = image.shape[2]
-        Py_ssize_t rows2 = rows + 2
-        Py_ssize_t cols2 = cols + 2
         Py_ssize_t r, c, k
 
         Py_ssize_t total = rows * cols * dims
-
-    shape_ext = (rows2, cols2, dims)
 
     cdef:
         np_floats[:, :, ::1] dx = out.copy()
@@ -120,7 +116,7 @@ def _denoise_tv_bregman(np_floats[:, :, ::1] image, np_floats weight,
         np_floats ux, uy, uprev, unew, bxx, byy, dxx, dyy, s, tx, ty
         int i = 0
         np_floats lam = 2 * weight
-        double rmse = DBL_MAX
+        cnp.float64_t rmse = DBL_MAX
         np_floats norm = (weight + 4 * lam)
 
         Py_ssize_t out_rows, out_cols
@@ -172,7 +168,7 @@ def _denoise_tv_bregman(np_floats[:, :, ::1] image, np_floats weight,
 
                         # update root mean square error
                         tx = unew - uprev
-                        rmse += <double>(tx * tx)
+                        rmse += <cnp.float64_t>(tx * tx)
 
                         bxx = bx[r, c, k]
                         byy = by[r, c, k]

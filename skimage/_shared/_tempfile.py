@@ -2,6 +2,7 @@ from tempfile import NamedTemporaryFile
 from contextlib import contextmanager
 import os
 
+
 @contextmanager
 def temporary_file(suffix=''):
     """Yield a writeable temporary filename that is deleted on context exit.
@@ -20,8 +21,8 @@ def temporary_file(suffix=''):
     ...     io.imsave(tempfile, im)
     ...     assert np.all(io.imread(tempfile) == im)
     """
-    tempfile_stream = NamedTemporaryFile(suffix=suffix, delete=False)
-    tempfile = tempfile_stream.name
-    tempfile_stream.close()
+    with NamedTemporaryFile(suffix=suffix, delete=False) as tempfile_stream:
+        tempfile = tempfile_stream.name
+
     yield tempfile
     os.remove(tempfile)

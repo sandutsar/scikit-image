@@ -6,26 +6,19 @@ from glob import glob
 import re
 from collections.abc import Sequence
 from copy import copy
-from packaging import version
 
 import numpy as np
-from PIL import Image, __version__ as pil_version
-
-# Check CVE-2021-27921 and others
-if version.parse(pil_version) < version.parse('8.1.2'):
-    from warnings import warn
-    warn('Your installed pillow version is < 8.1.2. '
-         'Several security issues (CVE-2021-27921, '
-         'CVE-2021-25290, CVE-2021-25291, CVE-2021-25293, '
-         'and more) have been fixed in pillow 8.1.2 or higher. '
-         'We recommend to upgrade this library.',
-         stacklevel=2)
+from PIL import Image
 
 from tifffile import TiffFile
 
 
-__all__ = ['MultiImage', 'ImageCollection', 'concatenate_images',
-           'imread_collection_wrapper']
+__all__ = [
+    'MultiImage',
+    'ImageCollection',
+    'concatenate_images',
+    'imread_collection_wrapper',
+]
 
 
 def concatenate_images(ic):
@@ -43,7 +36,8 @@ def concatenate_images(ic):
 
     See Also
     --------
-    ImageCollection.concatenate, MultiImage.concatenate
+    ImageCollection.concatenate
+    MultiImage.concatenate
 
     Raises
     ------
@@ -93,20 +87,18 @@ def _is_multipattern(input_pattern):
     """Helping function. Returns True if pattern contains a tuple, list, or a
     string separated with os.pathsep."""
     # Conditions to be accepted by ImageCollection:
-    has_str_ospathsep = (isinstance(input_pattern, str)
-                         and os.pathsep in input_pattern)
+    has_str_ospathsep = isinstance(input_pattern, str) and os.pathsep in input_pattern
     not_a_string = not isinstance(input_pattern, str)
     has_iterable = isinstance(input_pattern, Sequence)
     has_strings = all(isinstance(pat, str) for pat in input_pattern)
 
-    is_multipattern = (has_str_ospathsep or
-                       (not_a_string
-                        and has_iterable
-                        and has_strings))
+    is_multipattern = has_str_ospathsep or (
+        not_a_string and has_iterable and has_strings
+    )
     return is_multipattern
 
 
-class ImageCollection(object):
+class ImageCollection:
     """Load and manage a collection of image files.
 
     Parameters
@@ -115,13 +107,15 @@ class ImageCollection(object):
         Pattern string or list of strings to load. The filename path can be
         absolute or relative.
     conserve_memory : bool, optional
-        If True, `ImageCollection` does not keep more than one in memory at a
-        specific time. Otherwise, images will be cached once they are loaded.
+        If True, :class:`skimage.io.ImageCollection` does not keep more than one in
+        memory at a specific time. Otherwise, images will be cached once they are loaded.
 
     Other parameters
     ----------------
     load_func : callable
-        ``imread`` by default. See notes below.
+        ``imread`` by default. See Notes below.
+    **load_func_kwargs : dict
+        Any other keyword arguments are passed to `load_func`.
 
     Attributes
     ----------
@@ -132,32 +126,50 @@ class ImageCollection(object):
 
     Notes
     -----
-    Note that files are always returned in alphanumerical order. Also note
-    that slicing returns a new ImageCollection, *not* a view into the data.
+    Note that files are always returned in alphanumerical order. Also note that slicing
+    returns a new :class:`skimage.io.ImageCollection`, *not* a view into the data.
 
-    ImageCollection can be modified to load images from an arbitrary
-    source by specifying a combination of `load_pattern` and
-    `load_func`.  For an ImageCollection ``ic``, ``ic[5]`` uses
-    ``load_func(load_pattern[5])`` to load the image.
+    ImageCollection image loading can be customized through
+    `load_func`. For an ImageCollection ``ic``, ``ic[5]`` calls
+    ``load_func(load_pattern[5])`` to load that image.
 
-    Imagine, for example, an ImageCollection that loads every third
-    frame from a video file::
+    For example, here is an ImageCollection that, for each video provided,
+    loads every second frame::
 
-      video_file = 'no_time_for_that_tiny.gif'
+      import imageio.v3 as iio3
+      import itertools
 
       def vidread_step(f, step):
-          vid = imageio.get_reader(f)
-          seq = [v for v in vid.iter_data()]
-          return seq[::step]
+          vid = iio3.imiter(f)
+          return list(itertools.islice(vid, None, None, step)
 
-      ic = ImageCollection(video_file, load_func=vidread_step, step=3)
+      video_file = 'no_time_for_that_tiny.gif'
+      ic = ImageCollection(video_file, load_func=vidread_step, step=2)
 
-      ic  # is an ImageCollection object of length 1 because there is 1 file
+      ic  # is an ImageCollection object of length 1 because 1 video is provided
 
-      x = ic[0]  # calls vidread_step(video_file, step=3)
-      x[5]  # is the sixth element of a list of length 8 (24 / 3)
+      x = ic[0]
+      x[5]  # the 10th frame of the first video
 
-    Another use of ``load_func`` would be to convert all images to ``uint8``::
+    Alternatively, if `load_func` is provided and `load_pattern` is a
+    sequence, an :class:`skimage.io.ImageCollection` of corresponding length will
+    be created, and the individual images will be loaded by calling `load_func` with the
+    matching element of the `load_pattern` as its first argument. In this
+    case, the elements of the sequence do not need to be names of existing
+    files (or strings at all). For example, to create an :class:`skimage.io.ImageCollection`
+    containing 500 images from a video::
+
+      class FrameReader:
+          def __init__ (self, f):
+              self.f = f
+          def __call__ (self, index):
+              return iio3.imread(self.f, index=index)
+
+      ic = ImageCollection(range(500), load_func=FrameReader('movie.mp4'))
+
+      ic  # is an ImageCollection object of length 500
+
+    Another use of `load_func` would be to convert all images to ``uint8``::
 
       def imread_convert(f):
           return imread(f).astype(np.uint8)
@@ -166,8 +178,11 @@ class ImageCollection(object):
 
     Examples
     --------
+    >>> import imageio.v3 as iio3
     >>> import skimage.io as io
-    >>> from skimage import data_dir
+
+    # Where your images are located
+    >>> data_dir = os.path.join(os.path.dirname(__file__), '../data')
 
     >>> coll = io.ImageCollection(data_dir + '/chess*.png')
     >>> len(coll)
@@ -175,10 +190,25 @@ class ImageCollection(object):
     >>> coll[0].shape
     (200, 200)
 
-    >>> ic = io.ImageCollection(['/tmp/work/*.png', '/tmp/other/*.jpg'])
+    >>> image_col = io.ImageCollection([f'{data_dir}/*.png', '{data_dir}/*.jpg'])
+
+    >>> class MultiReader:
+    ...     def __init__ (self, f):
+    ...         self.f = f
+    ...     def __call__ (self, index):
+    ...         return iio3.imread(self.f, index=index)
+    ...
+    >>> filename = data_dir + '/no_time_for_that_tiny.gif'
+    >>> ic = io.ImageCollection(range(24), load_func=MultiReader(filename))
+    >>> len(image_col)
+    23
+    >>> isinstance(ic[0], np.ndarray)
+    True
     """
-    def __init__(self, load_pattern, conserve_memory=True, load_func=None,
-                 **load_func_kwargs):
+
+    def __init__(
+        self, load_pattern, conserve_memory=True, load_func=None, **load_func_kwargs
+    ):
         """Load and manage a collection of images."""
         self._files = []
         if _is_multipattern(load_pattern):
@@ -186,15 +216,18 @@ class ImageCollection(object):
                 load_pattern = load_pattern.split(os.pathsep)
             for pattern in load_pattern:
                 self._files.extend(glob(pattern))
+            self._files = sorted(self._files, key=alphanumeric_key)
         elif isinstance(load_pattern, str):
             self._files.extend(glob(load_pattern))
+            self._files = sorted(self._files, key=alphanumeric_key)
+        elif isinstance(load_pattern, Sequence) and load_func is not None:
+            self._files = list(load_pattern)
         else:
             raise TypeError('Invalid pattern as input.')
 
-        self._files = sorted(self._files, key=alphanumeric_key)
-
         if load_func is None:
             from ._io import imread
+
             self.load_func = imread
             self._numframes = self._find_images()
         else:
@@ -232,7 +265,7 @@ class ImageCollection(object):
                 try:
                     im = Image.open(fname)
                     im.seek(0)
-                except (IOError, OSError):
+                except OSError:
                     continue
                 i = 0
                 while True:
@@ -260,22 +293,21 @@ class ImageCollection(object):
 
         Returns
         -------
-        img : ndarray or ImageCollection.
+        img : ndarray or :class:`skimage.io.ImageCollection`
             The `n`-th image in the collection, or a new ImageCollection with
             the selected images.
         """
         if hasattr(n, '__index__'):
             n = n.__index__()
 
-        if type(n) not in [int, slice]:
+        if not isinstance(n, int | slice):
             raise TypeError('slicing must be with an int or slice object')
 
-        if type(n) is int:
+        if isinstance(n, int):
             n = self._check_imgnum(n)
             idx = n % len(self.data)
 
-            if ((self.conserve_memory and n != self._cached) or
-                    (self.data[idx] is None)):
+            if (self.conserve_memory and n != self._cached) or (self.data[idx] is None):
                 kwargs = self.load_func_kwargs
                 if self._frame_index:
                     fname, img_num = self._frame_index[n]
@@ -327,8 +359,7 @@ class ImageCollection(object):
         if -num <= n < num:
             n = n % num
         else:
-            raise IndexError("There are only %s images in the collection"
-                             % num)
+            raise IndexError(f"There are only {num} images in the collection")
         return n
 
     def __iter__(self):
@@ -365,12 +396,13 @@ class ImageCollection(object):
 
         See Also
         --------
-        concatenate_images
+        skimage.io.concatenate_images
 
         Raises
         ------
         ValueError
-            If images in the `ImageCollection` don't have identical shapes.
+            If images in the :class:`skimage.io.ImageCollection` do not have identical
+            shapes.
         """
         return concatenate_images(self)
 
@@ -396,14 +428,16 @@ def imread_collection_wrapper(imread):
             time.  Otherwise, images will be cached once they are loaded.
 
         """
-        return ImageCollection(load_pattern, conserve_memory=conserve_memory,
-                               load_func=imread)
+        return ImageCollection(
+            load_pattern, conserve_memory=conserve_memory, load_func=imread
+        )
+
     return imread_collection
 
 
 class MultiImage(ImageCollection):
 
-    """A class containing all frames from multi-frame images.
+    """A class containing all frames from multi-frame TIFF images.
 
     Parameters
     ----------
@@ -411,48 +445,50 @@ class MultiImage(ImageCollection):
         Pattern glob or filenames to load. The path can be absolute or
         relative.
     conserve_memory : bool, optional
-        Whether to conserve memory by only caching a single frame. Default is
-        True.
-
-    Other parameters
-    ----------------
-    load_func : callable
-        ``imread`` by default.  See notes below.
+        Whether to conserve memory by only caching the frames of a single
+        image. Default is True.
 
     Notes
     -----
-    If ``conserve_memory=True`` the memory footprint can be reduced, however
-    the performance can be affected because frames have to be read from file
-    more often.
+    `MultiImage` returns a list of image-data arrays. In this
+    regard, it is very similar to `ImageCollection`, but the two differ in
+    their treatment of multi-frame images.
 
-    The last accessed frame is cached, all other frames will have to be read
-    from file.
+    For a TIFF image containing N frames of size WxH, `MultiImage` stores
+    all frames of that image as a single element of shape `(N, W, H)` in the
+    list. `ImageCollection` instead creates N elements of shape `(W, H)`.
 
-    The current implementation makes use of ``tifffile`` for Tiff files and
-    PIL otherwise.
+    For an animated GIF image, `MultiImage` reads only the first frame, while
+    `ImageCollection` reads all frames by default.
 
     Examples
     --------
-    >>> from skimage import data_dir
+    # Where your images are located
+    >>> data_dir = os.path.join(os.path.dirname(__file__), '../data')
 
-    >>> img = MultiImage(data_dir + '/multipage.tif') # doctest: +SKIP
-    >>> len(img) # doctest: +SKIP
+    >>> multipage_tiff = data_dir + '/multipage.tif'
+    >>> multi_img = MultiImage(multipage_tiff)
+    >>> len(multi_img)  # multi_img contains one element
+    1
+    >>> multi_img[0].shape  # this element is a two-frame image of shape:
+    (2, 15, 10)
+
+    >>> image_col = ImageCollection(multipage_tiff)
+    >>> len(image_col)  # image_col contains two elements
     2
-    >>> for frame in img: # doctest: +SKIP
-    ...     print(frame.shape) # doctest: +SKIP
+    >>> for frame in image_col:
+    ...     print(frame.shape)  # each element is a frame of shape (15, 10)
+    ...
     (15, 10)
     (15, 10)
-
     """
 
-    def __init__(self, filename, conserve_memory=True, dtype=None,
-                 **imread_kwargs):
+    def __init__(self, filename, conserve_memory=True, dtype=None, **imread_kwargs):
         """Load a multi-img."""
         from ._io import imread
 
         self._filename = filename
-        super(MultiImage, self).__init__(filename, conserve_memory,
-                                         load_func=imread, **imread_kwargs)
+        super().__init__(filename, conserve_memory, load_func=imread, **imread_kwargs)
 
     @property
     def filename(self):

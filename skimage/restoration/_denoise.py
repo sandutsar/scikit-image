@@ -4,7 +4,6 @@ import numbers
 
 import scipy.stats
 import numpy as np
-import pywt
 
 from ..util.dtype import img_as_float
 from .._shared import utils
@@ -32,7 +31,7 @@ def _gaussian_weight(array, sigma_squared, *, dtype=float):
     gaussian : ndarray
         The input array filtered by the Gaussian.
     """
-    return np.exp(-0.5 * (array ** 2 / sigma_squared), dtype=dtype)
+    return np.exp(-0.5 * (array**2 / sigma_squared), dtype=dtype)
 
 
 def _compute_color_lut(bins, sigma, max_value, *, dtype=float):
@@ -93,10 +92,17 @@ def _compute_spatial_lut(win_size, sigma, *, dtype=float):
 
 
 @utils.channel_as_last_axis()
-@utils.deprecate_multichannel_kwarg(multichannel_position=7)
-def denoise_bilateral(image, win_size=None, sigma_color=None, sigma_spatial=1,
-                      bins=10000, mode='constant', cval=0, multichannel=False,
-                      *, channel_axis=None):
+def denoise_bilateral(
+    image,
+    win_size=None,
+    sigma_color=None,
+    sigma_spatial=1,
+    bins=10000,
+    mode='constant',
+    cval=0,
+    *,
+    channel_axis=None,
+):
     """Denoise image using bilateral filter.
 
     Parameters
@@ -121,15 +127,11 @@ def denoise_bilateral(image, win_size=None, sigma_color=None, sigma_spatial=1,
     mode : {'constant', 'edge', 'symmetric', 'reflect', 'wrap'}
         How to handle values outside the image borders. See
         `numpy.pad` for detail.
-    cval : string
+    cval : int or float
         Used in conjunction with mode 'constant', the value outside
         the image boundaries.
-    multichannel : bool
-        Whether the last axis of the image is to be interpreted as multiple
-        channels or another spatial dimension. This argument is deprecated:
-        specify `channel_axis` instead.
     channel_axis : int or None, optional
-        If None, the image is assumed to be a grayscale (single channel) image.
+        If ``None``, the image is assumed to be grayscale (single-channel).
         Otherwise, this parameter indicates which axis of the array corresponds
         to channels.
 
@@ -182,33 +184,43 @@ def denoise_bilateral(image, win_size=None, sigma_color=None, sigma_spatial=1,
     if channel_axis is not None:
         if image.ndim != 3:
             if image.ndim == 2:
-                raise ValueError("Use ``multichannel=False`` for 2D grayscale "
-                                 "images. The last axis of the input image "
-                                 "must be multiple color channels not another "
-                                 "spatial dimension.")
+                raise ValueError(
+                    "Use ``channel_axis=None`` for 2D grayscale "
+                    "images. The last axis of the input image "
+                    "must be multiple color channels not another "
+                    "spatial dimension."
+                )
             else:
-                raise ValueError(f'Bilateral filter is only implemented for '
-                                 f'2D grayscale images (image.ndim == 2) and '
-                                 f'2D multichannel (image.ndim == 3) images, '
-                                 f'but the input image has {image.ndim} dimensions.')
+                raise ValueError(
+                    f'Bilateral filter is only implemented for '
+                    f'2D grayscale images (image.ndim == 2) and '
+                    f'2D multichannel (image.ndim == 3) images, '
+                    f'but the input image has {image.ndim} dimensions.'
+                )
         elif image.shape[2] not in (3, 4):
             if image.shape[2] > 4:
-                msg = f'The last axis of the input image is ' \
-                      f'interpreted as channels. Input image with '\
-                      f'shape {image.shape} has {image.shape[2]} channels '\
-                      f'in last axis. ``denoise_bilateral``is implemented ' \
-                      f'for 2D grayscale and color images only.'
+                msg = (
+                    f'The last axis of the input image is '
+                    f'interpreted as channels. Input image with '
+                    f'shape {image.shape} has {image.shape[2]} channels '
+                    f'in last axis. ``denoise_bilateral``is implemented '
+                    f'for 2D grayscale and color images only.'
+                )
                 warn(msg)
             else:
-                msg = f'Input image must be grayscale, RGB, or RGBA; ' \
-                      f'but has shape {image.shape}.'
+                msg = (
+                    f'Input image must be grayscale, RGB, or RGBA; '
+                    f'but has shape {image.shape}.'
+                )
                 warn(msg)
     else:
         if image.ndim > 2:
-            raise ValueError(f'Bilateral filter is not implemented for '
-                             f'grayscale images of 3 or more dimensions, '
-                             f'but input image has {image.shape} shape. Use '
-                             f'``channel_axis=-1`` for 2D RGB images.')
+            raise ValueError(
+                f'Bilateral filter is not implemented for '
+                f'grayscale images of 3 or more dimensions, '
+                f'but input image has {image.shape} shape. Use '
+                f'``channel_axis=-1`` for 2D RGB images.'
+            )
 
     if win_size is None:
         win_size = max(5, 2 * int(ceil(3 * sigma_spatial)) + 1)
@@ -223,17 +235,14 @@ def denoise_bilateral(image, win_size=None, sigma_color=None, sigma_spatial=1,
     # and color_lut[<int>(dist * dist_scale)] may cause a segmentation fault
     # so we verify we have a positive image and that the max is not 0.0.
 
-
     image = np.atleast_3d(img_as_float(image))
     image = np.ascontiguousarray(image)
 
     sigma_color = sigma_color or image.std()
 
-    color_lut = _compute_color_lut(bins, sigma_color, max_value,
-                                   dtype=image.dtype)
+    color_lut = _compute_color_lut(bins, sigma_color, max_value, dtype=image.dtype)
 
-    range_lut = _compute_spatial_lut(win_size, sigma_spatial,
-                                     dtype=image.dtype)
+    range_lut = _compute_spatial_lut(win_size, sigma_spatial, dtype=image.dtype)
 
     out = np.empty(image.shape, dtype=image.dtype)
 
@@ -248,8 +257,20 @@ def denoise_bilateral(image, win_size=None, sigma_color=None, sigma_spatial=1,
     if min_value < 0:
         image = image - min_value
         max_value -= min_value
-    _denoise_bilateral(image, max_value, win_size, sigma_color, sigma_spatial,
-                       bins, mode, cval, color_lut, range_lut, empty_dims, out)
+    _denoise_bilateral(
+        image,
+        max_value,
+        win_size,
+        sigma_color,
+        sigma_spatial,
+        bins,
+        mode,
+        cval,
+        color_lut,
+        range_lut,
+        empty_dims,
+        out,
+    )
     # need to drop the added channels axis for grayscale images
     out = np.squeeze(out)
     if min_value < 0:
@@ -258,64 +279,85 @@ def denoise_bilateral(image, win_size=None, sigma_color=None, sigma_spatial=1,
 
 
 @utils.channel_as_last_axis()
-@utils.deprecate_multichannel_kwarg()
-@utils.deprecate_kwarg({'max_iter': 'max_num_iter'}, removed_version="1.0")
-def denoise_tv_bregman(image, weight=5.0, max_num_iter=100, eps=1e-3,
-                       isotropic=True, *, channel_axis=None,
-                       multichannel=False):
-    """Perform total-variation denoising using split-Bregman optimization.
+def denoise_tv_bregman(
+    image, weight=5.0, max_num_iter=100, eps=1e-3, isotropic=True, *, channel_axis=None
+):
+    r"""Perform total variation denoising using split-Bregman optimization.
 
-    Total-variation denoising (also know as total-variation regularization)
-    tries to find an image with less total-variation under the constraint
-    of being similar to the input image, which is controlled by the
-    regularization parameter ([1]_, [2]_, [3]_, [4]_).
+    Given :math:`f`, a noisy image (input data),
+    total variation denoising (also known as total variation regularization)
+    aims to find an image :math:`u` with less total variation than :math:`f`,
+    under the constraint that :math:`u` remain similar to :math:`f`.
+    This can be expressed by the Rudin--Osher--Fatemi (ROF) minimization
+    problem:
+
+    .. math::
+
+        \min_{u} \sum_{i=0}^{N-1} \left( \left| \nabla{u_i} \right| + \frac{\lambda}{2}(f_i - u_i)^2 \right)
+
+    where :math:`\lambda` is a positive parameter.
+    The first term of this cost function is the total variation;
+    the second term represents data fidelity. As :math:`\lambda \to 0`,
+    the total variation term dominates, forcing the solution to have smaller
+    total variation, at the expense of looking less like the input data.
+
+    This code is an implementation of the split Bregman algorithm of Goldstein
+    and Osher to solve the ROF problem ([1]_, [2]_, [3]_).
 
     Parameters
     ----------
     image : ndarray
-        Input data to be denoised (converted using img_as_float`).
-    weight : float
-        Denoising weight. The smaller the `weight`, the more denoising (at
-        the expense of less similarity to the `input`). The regularization
-        parameter `lambda` is chosen as `2 * weight`.
+        Input image to be denoised (converted using :func:`~.img_as_float`).
+    weight : float, optional
+        Denoising weight. It is equal to :math:`\frac{\lambda}{2}`. Therefore,
+        the smaller the `weight`, the more denoising (at
+        the expense of less similarity to `image`).
     eps : float, optional
-        Relative difference of the value of the cost function that determines
-        the stop criterion. The algorithm stops when::
-
-            SUM((u(n) - u(n-1))**2) < eps
-
+        Tolerance :math:`\varepsilon > 0` for the stop criterion:
+        The algorithm stops when :math:`\|u_n - u_{n-1}\|_2 < \varepsilon`.
     max_num_iter : int, optional
         Maximal number of iterations used for the optimization.
     isotropic : boolean, optional
         Switch between isotropic and anisotropic TV denoising.
     channel_axis : int or None, optional
-        If None, the image is assumed to be a grayscale (single channel) image.
+        If ``None``, the image is assumed to be grayscale (single-channel).
         Otherwise, this parameter indicates which axis of the array corresponds
         to channels.
 
         .. versionadded:: 0.19
            ``channel_axis`` was added in 0.19.
-    multichannel : bool, optional
-        Apply total-variation denoising separately for each channel. This
-        option should be true for color images, otherwise the denoising is
-        also applied in the channels dimension. This argument is deprecated:
-        specify `channel_axis` instead.
 
     Returns
     -------
     u : ndarray
         Denoised image.
 
+    Notes
+    -----
+    Ensure that `channel_axis` parameter is set appropriately for color
+    images.
+
+    The principle of total variation denoising is explained in [4]_.
+    It is about minimizing the total variation of an image,
+    which can be roughly described as
+    the integral of the norm of the image gradient. Total variation
+    denoising tends to produce cartoon-like images, that is,
+    piecewise-constant images.
+
+    See Also
+    --------
+    denoise_tv_chambolle : Perform total variation denoising in nD.
+
     References
     ----------
-    .. [1] https://en.wikipedia.org/wiki/Total_variation_denoising
-    .. [2] Tom Goldstein and Stanley Osher, "The Split Bregman Method For L1
+    .. [1] Tom Goldstein and Stanley Osher, "The Split Bregman Method For L1
            Regularized Problems",
-           ftp://ftp.math.ucla.edu/pub/camreport/cam08-29.pdf
-    .. [3] Pascal Getreuer, "Rudin–Osher–Fatemi Total Variation Denoising
+           https://ww3.math.ucla.edu/camreport/cam08-29.pdf
+    .. [2] Pascal Getreuer, "Rudin–Osher–Fatemi Total Variation Denoising
            using Split Bregman" in Image Processing On Line on 2012–05–19,
            https://www.ipol.im/pub/art/2012/g-tvd/article_lr.pdf
-    .. [4] https://web.math.ucsb.edu/~cgarcia/UGProjects/BregmanAlgorithms_JacquelineBush.pdf
+    .. [3] https://web.math.ucsb.edu/~cgarcia/UGProjects/BregmanAlgorithms_JacquelineBush.pdf
+    .. [4] https://en.wikipedia.org/wiki/Total_variation_denoising
 
     """
     image = np.atleast_3d(img_as_float(image))
@@ -334,23 +376,30 @@ def denoise_tv_bregman(image, weight=5.0, max_num_iter=100, eps=1e-3,
             # the algorithm below expects 3 dimensions to always be present.
             # slicing the array in this fashion preserves the channel dimension
             # for us
-            channel_in = np.ascontiguousarray(image[..., c:c+1])
+            channel_in = np.ascontiguousarray(image[..., c : c + 1])
 
-            _denoise_tv_bregman(channel_in, image.dtype.type(weight),
-                                max_num_iter, eps, isotropic, channel_out)
+            _denoise_tv_bregman(
+                channel_in,
+                image.dtype.type(weight),
+                max_num_iter,
+                eps,
+                isotropic,
+                channel_out,
+            )
 
             out[..., c] = channel_out[..., 0]
 
     else:
         image = np.ascontiguousarray(image)
 
-        _denoise_tv_bregman(image, image.dtype.type(weight), max_num_iter, eps,
-                            isotropic, out)
+        _denoise_tv_bregman(
+            image, image.dtype.type(weight), max_num_iter, eps, isotropic, out
+        )
 
     return np.squeeze(out[1:-1, 1:-1])
 
 
-def _denoise_tv_chambolle_nd(image, weight=0.1, eps=2.e-4, n_iter_max=200):
+def _denoise_tv_chambolle_nd(image, weight=0.1, eps=2.0e-4, max_num_iter=200):
     """Perform total-variation denoising on n-dimensional images.
 
     Parameters
@@ -366,7 +415,7 @@ def _denoise_tv_chambolle_nd(image, weight=0.1, eps=2.e-4, n_iter_max=200):
 
             (E_(n-1) - E_n) < eps * E_0
 
-    n_iter_max : int, optional
+    max_num_iter : int, optional
         Maximal number of iterations used for the optimization.
 
     Returns
@@ -380,42 +429,48 @@ def _denoise_tv_chambolle_nd(image, weight=0.1, eps=2.e-4, n_iter_max=200):
     """
 
     ndim = image.ndim
-    p = np.zeros((image.ndim, ) + image.shape, dtype=image.dtype)
+    p = np.zeros((image.ndim,) + image.shape, dtype=image.dtype)
     g = np.zeros_like(p)
     d = np.zeros_like(image)
     i = 0
-    while i < n_iter_max:
+    while i < max_num_iter:
         if i > 0:
             # d will be the (negative) divergence of p
             d = -p.sum(0)
-            slices_d = [slice(None), ] * ndim
-            slices_p = [slice(None), ] * (ndim + 1)
+            slices_d = [
+                slice(None),
+            ] * ndim
+            slices_p = [
+                slice(None),
+            ] * (ndim + 1)
             for ax in range(ndim):
                 slices_d[ax] = slice(1, None)
-                slices_p[ax+1] = slice(0, -1)
+                slices_p[ax + 1] = slice(0, -1)
                 slices_p[0] = ax
                 d[tuple(slices_d)] += p[tuple(slices_p)]
                 slices_d[ax] = slice(None)
-                slices_p[ax+1] = slice(None)
+                slices_p[ax + 1] = slice(None)
             out = image + d
         else:
             out = image
-        E = (d ** 2).sum()
+        E = (d**2).sum()
 
         # g stores the gradients of out along each axis
         # e.g. g[0] is the first order finite difference along axis 0
-        slices_g = [slice(None), ] * (ndim + 1)
+        slices_g = [
+            slice(None),
+        ] * (ndim + 1)
         for ax in range(ndim):
-            slices_g[ax+1] = slice(0, -1)
+            slices_g[ax + 1] = slice(0, -1)
             slices_g[0] = ax
             g[tuple(slices_g)] = np.diff(out, axis=ax)
-            slices_g[ax+1] = slice(None)
+            slices_g[ax + 1] = slice(None)
 
-        norm = np.sqrt((g ** 2).sum(axis=0))[np.newaxis, ...]
+        norm = np.sqrt((g**2).sum(axis=0))[np.newaxis, ...]
         E += weight * norm.sum()
-        tau = 1. / (2.*ndim)
+        tau = 1.0 / (2.0 * ndim)
         norm *= tau / weight
-        norm += 1.
+        norm += 1.0
         p -= tau * g
         p /= norm
         E /= float(image.size)
@@ -431,35 +486,48 @@ def _denoise_tv_chambolle_nd(image, weight=0.1, eps=2.e-4, n_iter_max=200):
     return out
 
 
-@utils.deprecate_multichannel_kwarg(multichannel_position=4)
-def denoise_tv_chambolle(image, weight=0.1, eps=2.e-4, n_iter_max=200,
-                         multichannel=False, *, channel_axis=None):
-    """Perform total-variation denoising on n-dimensional images.
+def denoise_tv_chambolle(
+    image, weight=0.1, eps=2.0e-4, max_num_iter=200, *, channel_axis=None
+):
+    r"""Perform total variation denoising in nD.
+
+    Given :math:`f`, a noisy image (input data),
+    total variation denoising (also known as total variation regularization)
+    aims to find an image :math:`u` with less total variation than :math:`f`,
+    under the constraint that :math:`u` remain similar to :math:`f`.
+    This can be expressed by the Rudin--Osher--Fatemi (ROF) minimization
+    problem:
+
+    .. math::
+
+        \min_{u} \sum_{i=0}^{N-1} \left( \left| \nabla{u_i} \right| + \frac{\lambda}{2}(f_i - u_i)^2 \right)
+
+    where :math:`\lambda` is a positive parameter.
+    The first term of this cost function is the total variation;
+    the second term represents data fidelity. As :math:`\lambda \to 0`,
+    the total variation term dominates, forcing the solution to have smaller
+    total variation, at the expense of looking less like the input data.
+
+    This code is an implementation of the algorithm proposed by Chambolle
+    in [1]_ to solve the ROF problem.
 
     Parameters
     ----------
-    image : ndarray of ints, uints or floats
-        Input data to be denoised. `image` can be of any numeric type,
-        but it is cast into an ndarray of floats for the computation
-        of the denoised image.
+    image : ndarray
+        Input image to be denoised. If its dtype is not float, it gets
+        converted with :func:`~.img_as_float`.
     weight : float, optional
-        Denoising weight. The greater `weight`, the more denoising (at
-        the expense of fidelity to `input`).
+        Denoising weight. It is equal to :math:`\frac{1}{\lambda}`. Therefore,
+        the greater the `weight`, the more denoising (at the expense of
+        fidelity to `image`).
     eps : float, optional
-        Relative difference of the value of the cost function that
-        determines the stop criterion. The algorithm stops when:
-
-            (E_(n-1) - E_n) < eps * E_0
-
-    n_iter_max : int, optional
+        Tolerance :math:`\varepsilon > 0` for the stop criterion (compares to
+        absolute value of relative difference of the cost function :math:`E`):
+        The algorithm stops when :math:`|E_{n-1} - E_n| < \varepsilon * E_0`.
+    max_num_iter : int, optional
         Maximal number of iterations used for the optimization.
-    multichannel : bool, optional
-        Apply total-variation denoising separately for each channel. This
-        option should be true for color images, otherwise the denoising is
-        also applied in the channels dimension. This argument is deprecated:
-        specify `channel_axis` instead.
     channel_axis : int or None, optional
-        If None, the image is assumed to be a grayscale (single channel) image.
+        If ``None``, the image is assumed to be grayscale (single-channel).
         Otherwise, this parameter indicates which axis of the array corresponds
         to channels.
 
@@ -468,30 +536,32 @@ def denoise_tv_chambolle(image, weight=0.1, eps=2.e-4, n_iter_max=200,
 
     Returns
     -------
-    out : ndarray
+    u : ndarray
         Denoised image.
 
     Notes
     -----
-    Make sure to set the multichannel parameter appropriately for color images.
+    Make sure to set the `channel_axis` parameter appropriately for color
+    images.
 
-    The principle of total variation denoising is explained in
-    https://en.wikipedia.org/wiki/Total_variation_denoising
-
-    The principle of total variation denoising is to minimize the
-    total variation of the image, which can be roughly described as
+    The principle of total variation denoising is explained in [2]_.
+    It is about minimizing the total variation of an image,
+    which can be roughly described as
     the integral of the norm of the image gradient. Total variation
-    denoising tends to produce "cartoon-like" images, that is,
+    denoising tends to produce cartoon-like images, that is,
     piecewise-constant images.
 
-    This code is an implementation of the algorithm of Rudin, Fatemi and Osher
-    that was proposed by Chambolle in [1]_.
+    See Also
+    --------
+    denoise_tv_bregman : Perform total variation denoising using split-Bregman
+        optimization.
 
     References
     ----------
     .. [1] A. Chambolle, An algorithm for total variation minimization and
            applications, Journal of Mathematical Imaging and Vision,
            Springer, 2004, 20, 89-97.
+    .. [2] https://en.wikipedia.org/wiki/Total_variation_denoising
 
     Examples
     --------
@@ -527,25 +597,26 @@ def denoise_tv_chambolle(image, weight=0.1, eps=2.e-4, n_iter_max=200,
         _at = functools.partial(utils.slice_at_axis, axis=channel_axis)
         out = np.zeros_like(image)
         for c in range(image.shape[channel_axis]):
-            out[_at(c)] = _denoise_tv_chambolle_nd(image[_at(c)], weight, eps,
-                                                   n_iter_max)
+            out[_at(c)] = _denoise_tv_chambolle_nd(
+                image[_at(c)], weight, eps, max_num_iter
+            )
     else:
-        out = _denoise_tv_chambolle_nd(image, weight, eps, n_iter_max)
+        out = _denoise_tv_chambolle_nd(image, weight, eps, max_num_iter)
     return out
 
 
 def _bayes_thresh(details, var):
     """BayesShrink threshold for a zero-mean details coeff array."""
     # Equivalent to:  dvar = np.var(details) for 0-mean details array
-    dvar = np.mean(details*details)
+    dvar = np.mean(details * details)
     eps = np.finfo(details.dtype).eps
     thresh = var / np.sqrt(max(dvar - var, eps))
     return thresh
 
 
 def _universal_thresh(img, sigma):
-    """ Universal threshold used by the VisuShrink method """
-    return sigma*np.sqrt(2*np.log(img.size))
+    """Universal threshold used by the VisuShrink method"""
+    return sigma * np.sqrt(2 * np.log(img.size))
 
 
 def _sigma_est_dwt(detail_coeffs, distribution='Gaussian'):
@@ -578,13 +649,19 @@ def _sigma_est_dwt(detail_coeffs, distribution='Gaussian'):
         denom = scipy.stats.norm.ppf(0.75)
         sigma = np.median(np.abs(detail_coeffs)) / denom
     else:
-        raise ValueError("Only Gaussian noise estimation is currently "
-                         "supported")
+        raise ValueError("Only Gaussian noise estimation is currently " "supported")
     return sigma
 
 
-def _wavelet_threshold(image, wavelet, method=None, threshold=None,
-                       sigma=None, mode='soft', wavelet_levels=None):
+def _wavelet_threshold(
+    image,
+    wavelet,
+    method=None,
+    threshold=None,
+    sigma=None,
+    mode='soft',
+    wavelet_levels=None,
+):
     """Perform wavelet thresholding.
 
     Parameters
@@ -632,12 +709,22 @@ def _wavelet_threshold(image, wavelet, method=None, threshold=None,
            by wavelet shrinkage." Biometrika 81.3 (1994): 425-455.
            :DOI:`10.1093/biomet/81.3.425`
     """
+    try:
+        import pywt
+    except ImportError:
+        raise ImportError(
+            'PyWavelets is not installed. Please ensure it is installed in '
+            'order to use this function.'
+        )
+
     wavelet = pywt.Wavelet(wavelet)
     if not wavelet.orthogonal:
-        warn(f'Wavelet thresholding was designed for '
-             f'use with orthogonal wavelets. For nonorthogonal '
-             f'wavelets such as {wavelet.name},results are '
-             f'likely to be suboptimal.')
+        warn(
+            f'Wavelet thresholding was designed for '
+            f'use with orthogonal wavelets. For nonorthogonal '
+            f'wavelets such as {wavelet.name},results are '
+            f'likely to be suboptimal.'
+        )
 
     # original_extent is used to workaround PyWavelets issue #80
     # odd-sized input results in an image with 1 extra sample after waverecn
@@ -661,18 +748,21 @@ def _wavelet_threshold(image, wavelet, method=None, threshold=None,
         sigma = _sigma_est_dwt(detail_coeffs, distribution='Gaussian')
 
     if method is not None and threshold is not None:
-        warn(f'Thresholding method {method} selected. The '
-             f'user-specified threshold will be ignored.')
+        warn(
+            f'Thresholding method {method} selected. The '
+            f'user-specified threshold will be ignored.'
+        )
 
     if threshold is None:
         var = sigma**2
         if method is None:
-            raise ValueError(
-                "If method is None, a threshold must be provided.")
+            raise ValueError("If method is None, a threshold must be provided.")
         elif method == "BayesShrink":
             # The BayesShrink thresholds from [1]_ in docstring
-            threshold = [{key: _bayes_thresh(level[key], var) for key in level}
-                         for level in dcoeffs]
+            threshold = [
+                {key: _bayes_thresh(level[key], var) for key in level}
+                for level in dcoeffs
+            ]
         elif method == "VisuShrink":
             # The VisuShrink thresholds from [2]_ in docstring
             threshold = _universal_thresh(image, sigma)
@@ -681,22 +771,27 @@ def _wavelet_threshold(image, wavelet, method=None, threshold=None,
 
     if np.isscalar(threshold):
         # A single threshold for all coefficient arrays
-        denoised_detail = [{key: pywt.threshold(level[key],
-                                                value=threshold,
-                                                mode=mode) for key in level}
-                           for level in dcoeffs]
+        denoised_detail = [
+            {
+                key: pywt.threshold(level[key], value=threshold, mode=mode)
+                for key in level
+            }
+            for level in dcoeffs
+        ]
     else:
         # Dict of unique threshold coefficients for each detail coeff. array
-        denoised_detail = [{key: pywt.threshold(level[key],
-                                                value=thresh[key],
-                                                mode=mode) for key in level}
-                           for thresh, level in zip(threshold, dcoeffs)]
+        denoised_detail = [
+            {
+                key: pywt.threshold(level[key], value=thresh[key], mode=mode)
+                for key in level
+            }
+            for thresh, level in zip(threshold, dcoeffs)
+        ]
     denoised_coeffs = [coeffs[0]] + denoised_detail
     return pywt.waverecn(denoised_coeffs, wavelet)[original_extent]
 
 
-def _scale_sigma_and_image_consistently(image, sigma, multichannel,
-                                        rescale_sigma):
+def _scale_sigma_and_image_consistently(image, sigma, multichannel, rescale_sigma):
     """If the ``image`` is rescaled, also rescale ``sigma`` consistently.
 
     Images that are not floating point will be rescaled via ``img_as_float``.
@@ -707,8 +802,9 @@ def _scale_sigma_and_image_consistently(image, sigma, multichannel,
             sigma = [sigma] * image.shape[-1]
         elif len(sigma) != image.shape[-1]:
             raise ValueError(
-                "When multichannel is True, sigma must be a scalar or have "
-                "length equal to the number of channels")
+                "When channel_axis is not None, sigma must be a scalar or have "
+                "length equal to the number of channels"
+            )
     if image.dtype.kind != 'f':
         if rescale_sigma:
             range_pre = image.max() - image.min()
@@ -718,8 +814,7 @@ def _scale_sigma_and_image_consistently(image, sigma, multichannel,
             # apply the same magnitude scaling to sigma
             scale_factor = range_post / range_pre
             if multichannel:
-                sigma = [s * scale_factor if s is not None else s
-                         for s in sigma]
+                sigma = [s * scale_factor if s is not None else s for s in sigma]
             elif sigma is not None:
                 sigma *= scale_factor
     elif image.dtype == np.float16:
@@ -750,16 +845,23 @@ def _rescale_sigma_rgb2ycbcr(sigmas):
 
 
 @utils.channel_as_last_axis()
-@utils.deprecate_multichannel_kwarg(multichannel_position=5)
-def denoise_wavelet(image, sigma=None, wavelet='db1', mode='soft',
-                    wavelet_levels=None, multichannel=False,
-                    convert2ycbcr=False, method='BayesShrink',
-                    rescale_sigma=True, *, channel_axis=None):
+def denoise_wavelet(
+    image,
+    sigma=None,
+    wavelet='db1',
+    mode='soft',
+    wavelet_levels=None,
+    convert2ycbcr=False,
+    method='BayesShrink',
+    rescale_sigma=True,
+    *,
+    channel_axis=None,
+):
     """Perform wavelet denoising on an image.
 
     Parameters
     ----------
-    image : ndarray ([M[, N[, ...P]][, C]) of ints, uints or floats
+    image : ndarray (M[, N[, ...P]][, C]) of ints, uints or floats
         Input data to be denoised. `image` can be of any numeric type,
         but it is cast into an ndarray of floats for the computation
         of the denoised image.
@@ -778,12 +880,8 @@ def denoise_wavelet(image, sigma=None, wavelet='db1', mode='soft',
     wavelet_levels : int or None, optional
         The number of wavelet decomposition levels to use.  The default is
         three less than the maximum number of possible decomposition levels.
-    multichannel : bool, optional
-        Apply wavelet denoising separately for each channel (where channels
-        correspond to the final axis of the array). This argument is
-        deprecated: specify `channel_axis` instead.
     convert2ycbcr : bool, optional
-        If True and multichannel True, do the wavelet denoising in the YCbCr
+        If True and channel_axis is set, do the wavelet denoising in the YCbCr
         colorspace instead of the RGB color space. This typically results in
         better performance for RGB images.
     method : {'BayesShrink', 'VisuShrink'}, optional
@@ -797,7 +895,7 @@ def denoise_wavelet(image, sigma=None, wavelet='db1', mode='soft',
         .. versionadded:: 0.16
            ``rescale_sigma`` was introduced in 0.16
     channel_axis : int or None, optional
-        If None, the image is assumed to be a grayscale (single channel) image.
+        If ``None``, the image is assumed to be grayscale (single-channel).
         Otherwise, this parameter indicates which axis of the array corresponds
         to channels.
 
@@ -861,6 +959,9 @@ def denoise_wavelet(image, sigma=None, wavelet='db1', mode='soft',
 
     Examples
     --------
+    .. testsetup::
+        >>> import pytest; _ = pytest.importorskip('pywt')
+
     >>> from skimage import color, data
     >>> img = img_as_float(data.astronaut())
     >>> img = color.rgb2gray(img)
@@ -872,19 +973,20 @@ def denoise_wavelet(image, sigma=None, wavelet='db1', mode='soft',
     """
     multichannel = channel_axis is not None
     if method not in ["BayesShrink", "VisuShrink"]:
-        raise ValueError(f'Invalid method: {method}. The currently supported '
-                         f'methods are "BayesShrink" and "VisuShrink".')
+        raise ValueError(
+            f'Invalid method: {method}. The currently supported '
+            f'methods are "BayesShrink" and "VisuShrink".'
+        )
 
     # floating-point inputs are not rescaled, so don't clip their output.
     clip_output = image.dtype.kind != 'f'
 
     if convert2ycbcr and not multichannel:
-        raise ValueError("convert2ycbcr requires multichannel == True")
+        raise ValueError("convert2ycbcr requires channel_axis to be set")
 
-    image, sigma = _scale_sigma_and_image_consistently(image,
-                                                       sigma,
-                                                       multichannel,
-                                                       rescale_sigma)
+    image, sigma = _scale_sigma_and_image_consistently(
+        image, sigma, multichannel, rescale_sigma
+    )
     if multichannel:
         if convert2ycbcr:
             out = color.rgb2ycbcr(image)
@@ -903,28 +1005,38 @@ def denoise_wavelet(image, sigma=None, wavelet='db1', mode='soft',
                 sigma_channel = sigma[i]
                 if sigma_channel is not None:
                     sigma_channel /= scale_factor
-                out[..., i] = denoise_wavelet(channel,
-                                              wavelet=wavelet,
-                                              method=method,
-                                              sigma=sigma_channel,
-                                              mode=mode,
-                                              wavelet_levels=wavelet_levels,
-                                              rescale_sigma=rescale_sigma)
+                out[..., i] = denoise_wavelet(
+                    channel,
+                    wavelet=wavelet,
+                    method=method,
+                    sigma=sigma_channel,
+                    mode=mode,
+                    wavelet_levels=wavelet_levels,
+                    rescale_sigma=rescale_sigma,
+                )
                 out[..., i] = out[..., i] * scale_factor
                 out[..., i] += _min
             out = color.ycbcr2rgb(out)
         else:
             out = np.empty_like(image)
             for c in range(image.shape[-1]):
-                out[..., c] = _wavelet_threshold(image[..., c],
-                                                 wavelet=wavelet,
-                                                 method=method,
-                                                 sigma=sigma[c], mode=mode,
-                                                 wavelet_levels=wavelet_levels)
+                out[..., c] = _wavelet_threshold(
+                    image[..., c],
+                    wavelet=wavelet,
+                    method=method,
+                    sigma=sigma[c],
+                    mode=mode,
+                    wavelet_levels=wavelet_levels,
+                )
     else:
-        out = _wavelet_threshold(image, wavelet=wavelet, method=method,
-                                 sigma=sigma, mode=mode,
-                                 wavelet_levels=wavelet_levels)
+        out = _wavelet_threshold(
+            image,
+            wavelet=wavelet,
+            method=method,
+            sigma=sigma,
+            mode=mode,
+            wavelet_levels=wavelet_levels,
+        )
 
     if clip_output:
         clip_range = (-1, 1) if image.min() < 0 else (0, 1)
@@ -932,9 +1044,7 @@ def denoise_wavelet(image, sigma=None, wavelet='db1', mode='soft',
     return out
 
 
-@utils.deprecate_multichannel_kwarg(multichannel_position=2)
-def estimate_sigma(image, average_sigmas=False, multichannel=False, *,
-                   channel_axis=None):
+def estimate_sigma(image, average_sigmas=False, *, channel_axis=None):
     """
     Robust wavelet-based estimator of the (Gaussian) noise standard deviation.
 
@@ -945,11 +1055,8 @@ def estimate_sigma(image, average_sigmas=False, multichannel=False, *,
     average_sigmas : bool, optional
         If true, average the channel estimates of `sigma`.  Otherwise return
         a list of sigmas corresponding to each channel.
-    multichannel : bool
-        Estimate sigma separately for each channel. This argument is
-        deprecated: specify `channel_axis` instead.
     channel_axis : int or None, optional
-        If None, the image is assumed to be a grayscale (single channel) image.
+        If ``None``, the image is assumed to be grayscale (single-channel).
         Otherwise, this parameter indicates which axis of the array corresponds
         to channels.
 
@@ -978,6 +1085,9 @@ def estimate_sigma(image, average_sigmas=False, multichannel=False, *,
 
     Examples
     --------
+    .. testsetup::
+        >>> import pytest; _ = pytest.importorskip('pywt')
+
     >>> import skimage.data
     >>> from skimage import img_as_float
     >>> img = img_as_float(skimage.data.camera())
@@ -986,19 +1096,30 @@ def estimate_sigma(image, average_sigmas=False, multichannel=False, *,
     >>> img = img + sigma * rng.standard_normal(img.shape)
     >>> sigma_hat = estimate_sigma(img, channel_axis=None)
     """
+    try:
+        import pywt
+    except ImportError:
+        raise ImportError(
+            'PyWavelets is not installed. Please ensure it is installed in '
+            'order to use this function.'
+        )
+
     if channel_axis is not None:
         channel_axis = channel_axis % image.ndim
         _at = functools.partial(utils.slice_at_axis, axis=channel_axis)
         nchannels = image.shape[channel_axis]
-        sigmas = [estimate_sigma(
-            image[_at(c)], channel_axis=None) for c in range(nchannels)]
+        sigmas = [
+            estimate_sigma(image[_at(c)], channel_axis=None) for c in range(nchannels)
+        ]
         if average_sigmas:
             sigmas = np.mean(sigmas)
         return sigmas
     elif image.shape[-1] <= 4:
-        msg = f'image is size {image.shape[-1]} on the last axis, '\
-              f'but channel_axis is None. If this is a color image, '\
-              f'please set channel_axis=-1 for proper noise estimation.'
+        msg = (
+            f'image is size {image.shape[-1]} on the last axis, '
+            f'but channel_axis is None. If this is a color image, '
+            f'please set channel_axis=-1 for proper noise estimation.'
+        )
         warn(msg)
     coeffs = pywt.dwtn(image, wavelet='db2')
     detail_coeffs = coeffs['d' * image.ndim]

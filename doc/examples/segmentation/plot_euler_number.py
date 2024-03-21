@@ -7,7 +7,7 @@ This example shows an illustration of the computation of the Euler number [1]_
 in 2D and 3D objects.
 
 For 2D objects, the Euler number is the number of objects minus the number of
-holes. Notice that if a neighbourhood of 8 connected pixels (2-connectivity)
+holes. Notice that if a neighborhood of 8 connected pixels (2-connectivity)
 is considered for objects, then this amounts to considering a neighborhood
 of 4 connected pixels (1-connectivity) for the complementary set (holes,
 background) , and conversely. It is also possible to compute the number of
@@ -17,14 +17,13 @@ from the difference between the two numbers.
 For 3D objects, the Euler number is obtained as the number of objects plus the
 number of holes, minus the number of tunnels, or loops. If one uses
 3-connectivity for an object (considering the 26 surrounding voxels as its
-neighbourhood), this corresponds to using 1-connectivity for the complementary
-set (holes, background), that is considering only 6 neighbours for a given
+neighborhood), this corresponds to using 1-connectivity for the complementary
+set (holes, background), that is considering only 6 neighbors for a given
 voxel. The voxels are represented here with blue transparent surfaces.
 Inner porosities are represented in red.
 
 .. [1] https://en.wikipedia.org/wiki/Euler_characteristic
 """
-from mpl_toolkits.mplot3d import Axes3D
 from skimage.measure import euler_number, label
 import matplotlib.pyplot as plt
 import numpy as np
@@ -32,16 +31,18 @@ import numpy as np
 
 # Sample image.
 SAMPLE = np.array(
-    [[0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 0],
-     [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0],
-     [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0],
-     [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0],
-     [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0],
-     [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
-     [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
-     [1, 0, 1, 0, 0, 1, 1, 0, 1, 1, 0, 0, 1, 1, 1, 1, 1, 0],
-     [0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 0, 0, 1, 1, 1, 1],
-     [0, 1, 1, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1]]
+    [
+        [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
+        [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
+        [1, 0, 1, 0, 0, 1, 1, 0, 1, 1, 0, 0, 1, 1, 1, 1, 1, 0],
+        [0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 0, 0, 1, 1, 1, 1],
+        [0, 1, 1, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1],
+    ]
 )
 SAMPLE = np.pad(SAMPLE, 1, mode='constant')
 
@@ -54,9 +55,11 @@ holes_nb_4 = object_nb_4 - e4
 e8 = euler_number(SAMPLE, connectivity=2)
 object_nb_8 = label(SAMPLE, connectivity=2).max()
 holes_nb_8 = object_nb_8 - e8
-ax.set_title(f'Euler number for N4: {e4} ({object_nb_4} objects, {holes_nb_4} '
-             f'holes), \n for N8: {e8} ({object_nb_8} objects, '
-             f'{holes_nb_8} holes)')
+ax.set_title(
+    f'Euler number for N4: {e4} ({object_nb_4} objects, {holes_nb_4} '
+    f'holes), \n for N8: {e8} ({object_nb_8} objects, '
+    f'{holes_nb_8} holes)'
+)
 plt.show()
 
 ######################################################################
@@ -70,8 +73,7 @@ plt.show()
 
 
 def make_ax(grid=False):
-    fig = plt.figure()
-    ax = fig.gca(projection='3d')
+    ax = plt.figure().add_subplot(projection='3d')
     ax.grid(grid)
     ax.set_axis_off()
     return ax
@@ -87,6 +89,7 @@ def explode(data):
     data_e = np.zeros(size - 1, dtype=data.dtype)
     data_e[::2, ::2, ::2] = data
     return data_e
+
 
 # shrink the gaps between voxels
 
@@ -128,7 +131,7 @@ def display_voxels(volume):
     # Define 3D figure and place voxels
     ax = make_ax()
     ax.voxels(x, y, z, filled, facecolors=fcolors)
-    # Compute Euler number in 6 and 26 neighbourhood configuration, that
+    # Compute Euler number in 6 and 26 neighborhood configuration, that
     # correspond to 1 and 3 connectivity, respectively
     e26 = euler_number(volume, connectivity=3)
     e6 = euler_number(volume, connectivity=1)
@@ -140,12 +143,12 @@ def display_voxels(volume):
 n = 7
 cube = np.ones((n, n, n), dtype=bool)
 # Add a tunnel
-c = int(n/2)
+c = int(n / 2)
 cube[c, :, c] = False
 # Add a new hole
-cube[int(3*n/4), c-1, c-1] = False
-# Add a hole in neighbourhood of previous one
-cube[int(3*n/4), c, c] = False
+cube[int(3 * n / 4), c - 1, c - 1] = False
+# Add a hole in neighborhood of previous one
+cube[int(3 * n / 4), c, c] = False
 # Add a second tunnel
-cube[:, c, int(3*n/4)] = False
+cube[:, c, int(3 * n / 4)] = False
 display_voxels(cube)
